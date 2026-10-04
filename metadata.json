@@ -1,0 +1,6 @@
+{
+  "name": "図面作成・webアプリ化",
+  "description": "図面作成ツール (Standalone Version)\nパーツ登録・読込機能\nプロパティ編集機能（選択時）\nメニューのウインドウ化",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
