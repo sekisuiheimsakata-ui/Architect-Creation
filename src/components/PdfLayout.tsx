@@ -2,7 +2,7 @@
 
 import React, { useEffect, useRef, useMemo, memo } from 'react';
 import type { AppState, LineType } from '../types';
-import { calculatePdfLayoutData, pointsToSvgPath, getPathAsPoints } from '../utils/layoutCalculator';
+import { calculatePdfLayoutData, pointsToSvgPath, getPathAsPoints, getFloorOffset } from '../utils/layoutCalculator';
 
 interface PdfLayoutProps {
   state: AppState;
@@ -81,9 +81,11 @@ const PdfLayoutContent: React.FC<PdfLayoutProps> = ({ state, onReady, pageWidth,
         const dotSpacing = NOMINAL_DOT_SPACING; // 225mm
 
         positionedFloors.forEach(floor => {
+            const floorOffset = getFloorOffset(state.drawingLayers, floor, BORDER_MARGIN);
+
             floor.unitRects.forEach(unitRect => {
-                const unitOriginX = BORDER_MARGIN + floor.tx + unitRect.x;
-                const unitOriginY = BORDER_MARGIN + floor.ty + unitRect.y;
+                const unitOriginX = BORDER_MARGIN + floor.tx + unitRect.x + floorOffset.x;
+                const unitOriginY = BORDER_MARGIN + floor.ty + unitRect.y + floorOffset.y;
                 const unitWidth = unitRect.width;
                 const unitHeight = unitRect.height;
 
@@ -93,7 +95,7 @@ const PdfLayoutContent: React.FC<PdfLayoutProps> = ({ state, onReady, pageWidth,
                         const dotY = unitOriginY + yOffset;
                         moduleDots.push(
                             <circle
-                                key={`md-${moduleX.toFixed(2)}-${dotY.toFixed(2)}`}
+                                key={`md-${floor.floorNumber}-${moduleX.toFixed(2)}-${dotY.toFixed(2)}`}
                                 cx={moduleX.toFixed(2)}
                                 cy={dotY.toFixed(2)}
                                 r="0.20"
@@ -156,14 +158,6 @@ const PdfLayoutContent: React.FC<PdfLayoutProps> = ({ state, onReady, pageWidth,
             >
               {areaSummaryString}
             </text>
-            
-            <g transform={`translate(${BORDER_MARGIN}, ${BORDER_MARGIN})`}>
-              {positionedFloors.map(floor => (
-                <g key={floor.floorNumber} transform={`translate(${floor.tx}, ${floor.ty})`}>
-                  <text x={floor.minX - (5 * NOMINAL_DOT_SPACING)} y={floor.minY - 9.5} textAnchor="start" dominantBaseline="middle" className="header-text">{floor.floorNumber}F</text>
-                </g>
-              ))}
-            </g>
           </g>
         )}
         
@@ -175,6 +169,23 @@ const PdfLayoutContent: React.FC<PdfLayoutProps> = ({ state, onReady, pageWidth,
             return (
               <g key={layer.id} id={`drawing-layer-render-${layer.id}`} opacity={layerOpacity}>
                 {layer.paths.map((path) => {
+                      if (path.text) {
+                          const minX = Math.min(...path.points.map(p => p.x));
+                          const maxY = Math.max(...path.points.map(p => p.y));
+                          return (
+                              <text
+                                  key={path.id}
+                                  x={minX}
+                                  y={maxY}
+                                  className="header-text"
+                                  fill={path.color || '#1e293b'}
+                                  style={{ fontSize: `${path.fontSize || 2.5}mm`, fontWeight: 'bold', userSelect: 'none' }}
+                              >
+                                  {path.text}
+                              </text>
+                          );
+                      }
+
                       // Fill
                       let fillElement = null;
                       if (path.fill) {

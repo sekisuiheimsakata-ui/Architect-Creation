@@ -99,6 +99,8 @@ export interface DrawingPath {
   fill?: string; // Optional fill color
   fillOpacity?: number; // 0.0 to 1.0
   opacity?: number; // 0.0 to 1.0 (Stroke opacity)
+  text?: string; // Text for labels (e.g. 1F, 2F)
+  fontSize?: number; // Font size in mm
 }
 
 export type LayerVisibility = 'visible' | 'faint' | 'hidden';
@@ -155,6 +157,7 @@ export interface AppState {
   isPdfOptionsVisible: boolean;
   isPrintOptionsVisible: boolean;
   isSvgOptionsVisible: boolean;
+  isCopilotModalVisible: boolean;
   firstFloorDeduction: DeductionOption | null;
   stairDeductions: { [floorNumber: number]: DeductionOption | null };
   mode: AppMode;
@@ -227,6 +230,8 @@ export type Action =
   | { type: 'HIDE_PRINT_OPTIONS' }
   | { type: 'SHOW_SVG_OPTIONS' }
   | { type: 'HIDE_SVG_OPTIONS' }
+  | { type: 'SHOW_COPILOT_MODAL' }
+  | { type: 'HIDE_COPILOT_MODAL' }
   | { type: 'SET_DEDUCTION', payload: DeductionOption | null }
   | { type: 'SET_STAIR_DEDUCTION', payload: { floorNumber: number, option: DeductionOption | null } }
   | { type: 'UNDO' }

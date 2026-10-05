@@ -159,6 +159,10 @@ export const DraftingCanvas: React.FC = () => {
                   continue;
               }
               
+              if (path.text) {
+                  return path;
+              }
+              
               const pointGroups = getPathAsPoints(path, false, false);
               for (const points of pointGroups) {
                   for (let k = 0; k < points.length - 1; k++) {
@@ -1052,17 +1056,36 @@ export const DraftingCanvas: React.FC = () => {
         <g id="interaction-overlay">
             {/* Hover Effect */}
             {hoveredPathId && !drawingState.isActive && !moveOperation && !selectionBox && (
-                state.drawingLayers.flatMap(l => l.paths).filter(p => p.id === hoveredPathId).map(path => (
-                    <path
-                        key={`hover-${path.id}`}
-                        d={pointsToSvgPath(getPathAsPoints(path, false, true)[0], false)}
-                        stroke={HOVER_HIGHLIGHT_COLOR}
-                        strokeWidth={(path.strokeWidth || 0.5) + 1}
-                        fill="none"
-                        opacity={0.5}
-                        pointerEvents="none"
-                    />
-                ))
+                state.drawingLayers.flatMap(l => l.paths).filter(p => p.id === hoveredPathId).map(path => {
+                    if (path.text) {
+                        const bounds = getPointsBounds(path.points);
+                        return (
+                            <rect
+                                key={`hover-${path.id}`}
+                                x={bounds.x - 0.5}
+                                y={bounds.y - 0.5}
+                                width={bounds.width + 1}
+                                height={bounds.height + 1}
+                                fill="none"
+                                stroke={HOVER_HIGHLIGHT_COLOR}
+                                strokeWidth={0.5}
+                                rx={0.5}
+                                pointerEvents="none"
+                            />
+                        );
+                    }
+                    return (
+                        <path
+                            key={`hover-${path.id}`}
+                            d={pointsToSvgPath(getPathAsPoints(path, false, true)[0], false)}
+                            stroke={HOVER_HIGHLIGHT_COLOR}
+                            strokeWidth={(path.strokeWidth || 0.5) + 1}
+                            fill="none"
+                            opacity={0.5}
+                            pointerEvents="none"
+                        />
+                    );
+                })
             )}
 
             {/* Selection Highlights & Drag Ghost */}
@@ -1074,6 +1097,36 @@ export const DraftingCanvas: React.FC = () => {
                     const relPoints = path.points.map(p => ({ x: p.x - moveOperation.basePoint.x, y: p.y - moveOperation.basePoint.y }));
                     const transformedRel = transformPoints(relPoints, moveOperation.transform);
                     const finalPoints = transformedRel.map(p => ({ x: p.x + moveOperation.currentSvgPos.x, y: p.y + moveOperation.currentSvgPos.y }));
+
+                    if (path.text) {
+                        const bounds = getPointsBounds(finalPoints);
+                        return (
+                            <g key={`ghost-${id}`}>
+                                <text
+                                    x={bounds.x}
+                                    y={bounds.y + bounds.height}
+                                    fill={HOVER_HIGHLIGHT_COLOR}
+                                    style={{ fontSize: `${path.fontSize || 2.5}mm`, fontWeight: 'bold' }}
+                                    opacity={0.8}
+                                    pointerEvents="none"
+                                >
+                                    {path.text}
+                                </text>
+                                <rect
+                                    x={bounds.x - 0.5}
+                                    y={bounds.y - 0.5}
+                                    width={bounds.width + 1}
+                                    height={bounds.height + 1}
+                                    fill="none"
+                                    stroke={HOVER_HIGHLIGHT_COLOR}
+                                    strokeWidth={0.4}
+                                    strokeDasharray="1 1"
+                                    rx={0.5}
+                                    pointerEvents="none"
+                                />
+                            </g>
+                        );
+                    }
 
                     return (
                         <path
@@ -1087,6 +1140,25 @@ export const DraftingCanvas: React.FC = () => {
                         />
                     );
                 } else {
+                    if (path.text) {
+                        const bounds = getPointsBounds(path.points);
+                        return (
+                            <rect
+                                key={`sel-${id}`}
+                                x={bounds.x - 0.5}
+                                y={bounds.y - 0.5}
+                                width={bounds.width + 1}
+                                height={bounds.height + 1}
+                                fill="none"
+                                stroke={SELECTION_HIGHLIGHT_COLOR}
+                                strokeWidth={0.5}
+                                strokeDasharray="1 1"
+                                rx={0.5}
+                                pointerEvents="none"
+                            />
+                        );
+                    }
+
                     return (
                         <path
                             key={`sel-${id}`}

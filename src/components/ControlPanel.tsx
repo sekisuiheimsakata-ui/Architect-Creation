@@ -13,7 +13,7 @@ import {
     PrintIcon, PdfIcon, SvgIcon, TuneIcon, HelpIcon,
     AllIcon, Floor1Icon, Floor2Icon, Floor3Icon, UndoIcon, RedoIcon, PlusIcon, MinusIcon,
     PanZoomIcon, SelectIcon, RegisterPartIcon, KbdIcon, LayerIcon, HelpPencilIcon,
-    ChevronDownIcon, FilePlusIcon, TrashIcon
+    ChevronDownIcon, FilePlusIcon, TrashIcon, SparklesIcon
 } from './Icons';
 
 // --- Sub Components ---
@@ -87,6 +87,16 @@ const FileTabContent: React.FC<{ onAction: (type: string) => void }> = ({ onActi
             <FileActionButton onClick={() => onAction('PRINT')} icon={<PrintIcon className="w-4 h-4"/>} label="印刷" />
             <FileActionButton onClick={() => onAction('PDF')} icon={<PdfIcon className="w-4 h-4"/>} label="PDF出力" />
             <FileActionButton onClick={() => onAction('SVG')} icon={<SvgIcon className="w-4 h-4"/>} label="SVG出力" />
+        </div>
+
+        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider border-b pb-1 mt-4">AI・画像加工</h3>
+        <div className="space-y-2">
+            <FileActionButton 
+                onClick={() => onAction('COPILOT')} 
+                icon={<SparklesIcon className="w-4 h-4 text-indigo-600"/>} 
+                label="Copilot画像加工 (プレゼン)" 
+                colorClass="text-indigo-900 bg-indigo-50/70 hover:bg-indigo-100 hover:border-indigo-300 border-indigo-200 shadow-xs font-medium" 
+            />
         </div>
 
         <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider border-b pb-1 mt-4">設定・クリア</h3>
@@ -259,6 +269,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = memo(({ isOpen, onClose
             case 'PRINT': dispatch({ type: 'SHOW_PRINT_OPTIONS' }); break;
             case 'PDF': dispatch({ type: 'SHOW_PDF_OPTIONS' }); break;
             case 'SVG': dispatch({ type: 'SHOW_SVG_OPTIONS' }); break;
+            case 'COPILOT': dispatch({ type: 'SHOW_COPILOT_MODAL' }); break;
             case 'SETTINGS': dispatch({ type: 'SHOW_DRAFTING_SETTINGS' }); break;
             case 'CLEAR_UNITS': dispatch({ type: 'SHOW_CLEAR_UNITS_CONFIRM' }); break;
             case 'CLEAR_DRAWING': dispatch({ type: 'SHOW_CLEAR_DRAWING_CONFIRM' }); break;

@@ -4,7 +4,7 @@ import type { AppState, Action, PlacedUnit, DrawingPath, DrawingLayer, Deduction
 import { isPlacementValid } from '../utils/validation';
 import { DEDUCTION_OPTIONS, STAIR_DEDUCTION_OPTIONS, PAGE_DIMENSIONS, GRID_ROWS, GRID_COLS, MAX_FLOORS, MIN_SCALE, MAX_SCALE } from '../constants';
 import { transformPoints } from '../utils/geometry';
-import { calculatePdfLayoutData } from '../utils/layoutCalculator';
+import { calculatePdfLayoutData, getFloorOffset, createFloorLabelPath } from '../utils/layoutCalculator';
 import { PaperSize, PaperOrientation } from '../components/PrintLayout';
 
 const initialGrid: (PlacedUnit | null)[][][] = Array.from({ length: MAX_FLOORS }, () =>
@@ -48,7 +48,8 @@ const createUnitLayer = (
     firstFloorDeduction: AppState['firstFloorDeduction'], 
     stairDeductions: AppState['stairDeductions'],
     size: PaperSize, 
-    orientation: PaperOrientation
+    orientation: PaperOrientation,
+    existingLayers?: DrawingLayer[]
 ): DrawingLayer => {
     const { width, height } = PAGE_DIMENSIONS[size][orientation];
     const layoutData = calculatePdfLayoutData(present, firstFloorDeduction, stairDeductions, width, height);
@@ -57,10 +58,12 @@ const createUnitLayer = (
     const paths: DrawingPath[] = [];
     
     const LINE_WIDTH = 0.1;
+    const existingUnitLayer = existingLayers?.find(l => l.id === 1001 || l.name === 'ユニット配置');
 
     layoutData.positionedFloors.forEach(floor => {
-        const tx = BORDER_MARGIN + floor.tx;
-        const ty = BORDER_MARGIN + floor.ty;
+        const floorOffset = getFloorOffset(existingLayers, floor, BORDER_MARGIN);
+        const tx = BORDER_MARGIN + floor.tx + floorOffset.x;
+        const ty = BORDER_MARGIN + floor.ty + floorOffset.y;
 
         // Walls
         const addWallPaths = (polygons: any[], isOuter: boolean) => {
@@ -94,6 +97,15 @@ const createUnitLayer = (
                 opacity: 1.0
             });
         });
+
+        // Floor Number Label (e.g. 1F, 2F, 3F)
+        // If user already moved the label, keep their custom moved position!
+        const existingLabel = existingUnitLayer?.paths.find(p => p.id === `unit-label-${floor.floorNumber}`);
+        if (existingLabel) {
+            paths.push(existingLabel);
+        } else {
+            paths.push(createFloorLabelPath(floor, BORDER_MARGIN, floorOffset));
+        }
     });
 
     return {
@@ -131,6 +143,7 @@ export const initialState: AppState = {
   isPdfOptionsVisible: false,
   isPrintOptionsVisible: false,
   isSvgOptionsVisible: false,
+  isCopilotModalVisible: false,
   firstFloorDeduction: null,
   stairDeductions: {},
   mode: 'drafting', // Start in drafting mode
@@ -175,7 +188,7 @@ const updateSystemLayers = (
     size: PaperSize, 
     orientation: PaperOrientation
 ): DrawingLayer[] => {
-    const unitLayerContent = createUnitLayer(present, firstFloorDeduction, stairDeductions, size, orientation);
+    const unitLayerContent = createUnitLayer(present, firstFloorDeduction, stairDeductions, size, orientation, layers);
     const frameLayerContent = createFrameLayer(size, orientation);
     
     // Check by ID first (robustness for renamed layers), then by Name (legacy support)
@@ -382,13 +395,140 @@ const handleLoadState = (state: AppState, payload: any): AppState => {
     }
 
     // Ensure System Layers exist and are updated based on loaded grid
-    const loadedSize = draftingSettings?.size || state.draftingSettings.size;
-    const loadedOrientation = draftingSettings?.orientation || state.draftingSettings.orientation;
-    
-    loadedDrawingLayers = updateSystemLayers(
-        loadedDrawingLayers, sanitizedGrid, migratedFirstFloorDeduction, migratedStairDeductions,
-        loadedSize, loadedOrientation
-    );
+    // 1. Determine draftingSettings (paper size and orientation)
+    let loadedSize = draftingSettings?.size;
+    let loadedOrientation = draftingSettings?.orientation;
+
+    if (!loadedSize || !loadedOrientation) {
+        const frameLayer = loadedDrawingLayers.find(l => l.id === 1000 || l.name === '用紙枠');
+        if (frameLayer && frameLayer.paths.length > 0) {
+            const allX = frameLayer.paths.flatMap(p => p.points.map(pt => pt.x));
+            const allY = frameLayer.paths.flatMap(p => p.points.map(pt => pt.y));
+            if (allX.length > 0 && allY.length > 0) {
+                const maxX = Math.max(...allX);
+                const maxY = Math.max(...allY);
+                const w = maxX + 10;
+                const h = maxY + 10;
+                if (w > 350) {
+                    loadedSize = 'a3';
+                    loadedOrientation = 'landscape';
+                } else if (h > 350) {
+                    loadedSize = 'a3';
+                    loadedOrientation = 'portrait';
+                } else if (w > 250 && h < 250) {
+                    loadedSize = 'a4';
+                    loadedOrientation = 'landscape';
+                } else if (w < 250 && h > 250) {
+                    loadedSize = 'a4';
+                    loadedOrientation = 'portrait';
+                }
+            }
+        }
+    }
+
+    const effectiveDraftingSettings: { size: PaperSize; orientation: PaperOrientation } = {
+        size: loadedSize || state.draftingSettings.size,
+        orientation: loadedOrientation || state.draftingSettings.orientation
+    };
+
+    // 2. Synchronize and preserve System Layers
+    const existingUnitIndex = loadedDrawingLayers.findIndex(l => l.id === 1001 || l.name === 'ユニット配置');
+    const existingFrameIndex = loadedDrawingLayers.findIndex(l => l.id === 1000 || l.name === '用紙枠');
+
+    const { width: pWidth, height: pHeight } = PAGE_DIMENSIONS[effectiveDraftingSettings.size][effectiveDraftingSettings.orientation];
+    const layoutData = calculatePdfLayoutData(sanitizedGrid, migratedFirstFloorDeduction, migratedStairDeductions, pWidth, pHeight);
+    const BORDER_MARGIN = layoutData.BORDER_MARGIN;
+
+    // Check if the loaded JSON already contains a unit placement layer with paths
+    if (existingUnitIndex !== -1 && loadedDrawingLayers[existingUnitIndex].paths.length > 0) {
+        const unitLayer = loadedDrawingLayers[existingUnitIndex];
+        const updatedPaths = [...unitLayer.paths];
+
+        // Normalize IDs: If older JSON paths don't have floorNumber (e.g. `unit-wall-in-0-`),
+        // tag them with their floor number based on which floor they belong to
+        const needsFloorTagging = updatedPaths.some(p => 
+            (p.id.startsWith('unit-wall-') || p.id.startsWith('unit-pillar-')) && 
+            !/^unit-(?:wall|pillar)-\d+-/.test(p.id)
+        );
+
+        if (needsFloorTagging && layoutData.positionedFloors.length > 0) {
+            for (let i = 0; i < updatedPaths.length; i++) {
+                const p = updatedPaths[i];
+                if ((p.id.startsWith('unit-wall-') || p.id.startsWith('unit-pillar-')) && !/^unit-(?:wall|pillar)-\d+-/.test(p.id)) {
+                    if (layoutData.positionedFloors.length === 1) {
+                        const fNum = layoutData.positionedFloors[0].floorNumber;
+                        updatedPaths[i] = {
+                            ...p,
+                            id: p.id.replace(/^unit-(wall|pillar)-/, `unit-$1-${fNum}-`)
+                        };
+                    } else {
+                        const pts = p.points;
+                        if (pts && pts.length > 0) {
+                            const pCenterX = pts.reduce((sum, pt) => sum + pt.x, 0) / pts.length;
+                            const pCenterY = pts.reduce((sum, pt) => sum + pt.y, 0) / pts.length;
+                            let closestFloor = layoutData.positionedFloors[0];
+                            let closestDist = Infinity;
+                            for (const f of layoutData.positionedFloors) {
+                                const fCenterX = BORDER_MARGIN + f.tx + (f.minX + f.maxX) / 2;
+                                const fCenterY = BORDER_MARGIN + f.ty + (f.minY + f.maxY) / 2;
+                                const d = Math.hypot(pCenterX - fCenterX, pCenterY - fCenterY);
+                                if (d < closestDist) {
+                                    closestDist = d;
+                                    closestFloor = f;
+                                }
+                            }
+                            updatedPaths[i] = {
+                                ...p,
+                                id: p.id.replace(/^unit-(wall|pillar)-/, `unit-$1-${closestFloor.floorNumber}-`)
+                            };
+                        }
+                    }
+                }
+            }
+        }
+
+        // Ensure each positioned floor has a movable floor label (unit-label-${floorNumber})
+        layoutData.positionedFloors.forEach(floor => {
+            const hasLabel = updatedPaths.some(p => p.id === `unit-label-${floor.floorNumber}`);
+            if (!hasLabel) {
+                const floorOffset = getFloorOffset(loadedDrawingLayers, floor, BORDER_MARGIN);
+                updatedPaths.push(createFloorLabelPath(floor, BORDER_MARGIN, floorOffset));
+            }
+        });
+
+        loadedDrawingLayers[existingUnitIndex] = {
+            ...unitLayer,
+            id: 1001,
+            paths: updatedPaths
+        };
+    } else {
+        // Unit layer is missing or empty, generate from sanitizedGrid
+        const generatedUnitLayer = createUnitLayer(
+            sanitizedGrid, migratedFirstFloorDeduction, migratedStairDeductions,
+            effectiveDraftingSettings.size, effectiveDraftingSettings.orientation,
+            loadedDrawingLayers
+        );
+        if (existingUnitIndex !== -1) {
+            loadedDrawingLayers[existingUnitIndex] = generatedUnitLayer;
+        } else {
+            loadedDrawingLayers.unshift(generatedUnitLayer);
+        }
+    }
+
+    // Ensure Frame Layer exists
+    if (existingFrameIndex !== -1 && loadedDrawingLayers[existingFrameIndex].paths.length > 0) {
+        loadedDrawingLayers[existingFrameIndex] = {
+            ...loadedDrawingLayers[existingFrameIndex],
+            id: 1000
+        };
+    } else {
+        const frameLayer = createFrameLayer(effectiveDraftingSettings.size, effectiveDraftingSettings.orientation);
+        if (existingFrameIndex !== -1) {
+            loadedDrawingLayers[existingFrameIndex] = frameLayer;
+        } else {
+            loadedDrawingLayers.unshift(frameLayer);
+        }
+    }
     
     // Migrate Parts & Sanitize Points
     const rawParts = Array.isArray(registeredParts) ? registeredParts : [];
@@ -421,7 +561,7 @@ const handleLoadState = (state: AppState, payload: any): AppState => {
         selectedPathIds: [],
         registeredParts: migratedParts,
         clipboard: [],
-        draftingSettings: draftingSettings || state.draftingSettings,
+        draftingSettings: effectiveDraftingSettings,
         showBaseGrid: migratedShowBaseGrid,
         showModuleGrid: migratedShowModuleGrid,
         // FORCE RESET VIEW ON LOAD & TRIGGER FIT
@@ -536,6 +676,8 @@ export function appReducer(state: AppState, action: Action): AppState {
     case 'HIDE_PRINT_OPTIONS': return { ...state, isPrintOptionsVisible: false };
     case 'SHOW_SVG_OPTIONS': return { ...state, isSvgOptionsVisible: true };
     case 'HIDE_SVG_OPTIONS': return { ...state, isSvgOptionsVisible: false };
+    case 'SHOW_COPILOT_MODAL': return { ...state, isCopilotModalVisible: true };
+    case 'HIDE_COPILOT_MODAL': return { ...state, isCopilotModalVisible: false };
     
     case 'SET_DEDUCTION': {
         const newState = { ...state, firstFloorDeduction: action.payload };

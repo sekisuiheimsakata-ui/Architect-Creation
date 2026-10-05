@@ -1,5 +1,5 @@
 
-import type { AppState, PlacedUnit, DrawingPoint, DrawingPath } from "../types";
+import type { AppState, PlacedUnit, DrawingPoint, DrawingPath, DrawingLayer } from "../types";
 import { calculateArea } from "./areaCalculator";
 
 const NOMINAL_DOT_SPACING = 2.25;
@@ -663,3 +663,120 @@ export const calculateViewBoundingBox = (
       height: globalMaxY - globalMinY 
   };
 };
+
+export const getFloorOffset = (
+  drawingLayers: DrawingLayer[] | undefined,
+  floor: { 
+    floorNumber: number; 
+    tx: number; 
+    ty: number; 
+    minX?: number;
+    minY?: number;
+    maxX?: number;
+    maxY?: number;
+    outerWallPolygons: { x: number; y: number }[][]; 
+  },
+  borderMargin: number
+): { x: number; y: number } => {
+  if (!drawingLayers) return { x: 0, y: 0 };
+  const unitLayer = drawingLayers.find(l => l.id === 1001 || l.name === 'ユニット配置');
+  if (!unitLayer || !unitLayer.paths || unitLayer.paths.length === 0) {
+    return { x: 0, y: 0 };
+  }
+
+  // 1. Look for paths explicitly tagged with this floor number
+  let floorPaths = unitLayer.paths.filter(p => 
+    p.id.startsWith(`unit-wall-${floor.floorNumber}-`) ||
+    p.id.startsWith(`unit-pillar-${floor.floorNumber}-`)
+  );
+
+  // 2. Fallback for legacy JSON files where paths did not have floorNumber in ID
+  if (floorPaths.length === 0) {
+    const legacyPaths = unitLayer.paths.filter(p => 
+      !p.id.startsWith('unit-label-') && !p.id.startsWith('frame-')
+    );
+    if (legacyPaths.length > 0) {
+      const expectedCenterX = borderMargin + floor.tx + (floor.minX !== undefined && floor.maxX !== undefined ? (floor.minX + floor.maxX) / 2 : 0);
+      const expectedCenterY = borderMargin + floor.ty + (floor.minY !== undefined && floor.maxY !== undefined ? (floor.minY + floor.maxY) / 2 : 0);
+      
+      floorPaths = legacyPaths.filter(p => {
+        const pts = p.points;
+        if (!pts || pts.length === 0) return false;
+        const pCenterX = pts.reduce((sum, pt) => sum + pt.x, 0) / pts.length;
+        const pCenterY = pts.reduce((sum, pt) => sum + pt.y, 0) / pts.length;
+        return Math.hypot(pCenterX - expectedCenterX, pCenterY - expectedCenterY) < 250;
+      });
+    }
+  }
+
+  if (floorPaths.length === 0) {
+    return { x: 0, y: 0 };
+  }
+
+  // Prioritize outer wall paths, then any wall paths, then candidate paths
+  const outerWallPaths = floorPaths.filter(p => p.id.includes('out'));
+  const candidatePaths = outerWallPaths.length > 0 
+    ? outerWallPaths 
+    : (floorPaths.filter(p => p.id.includes('wall')).length > 0 ? floorPaths.filter(p => p.id.includes('wall')) : floorPaths);
+
+  const currentMinX = Math.min(...candidatePaths.flatMap(p => p.points.map(pt => pt.x)));
+  const currentMinY = Math.min(...candidatePaths.flatMap(p => p.points.map(pt => pt.y)));
+
+  let expectedMinX: number;
+  let expectedMinY: number;
+
+  if (floor.outerWallPolygons && floor.outerWallPolygons.length > 0 && floor.outerWallPolygons[0].length > 0) {
+    const allOuterX = floor.outerWallPolygons.flatMap(poly => poly.map(p => p.x));
+    const allOuterY = floor.outerWallPolygons.flatMap(poly => poly.map(p => p.y));
+    expectedMinX = borderMargin + floor.tx + Math.min(...allOuterX);
+    expectedMinY = borderMargin + floor.ty + Math.min(...allOuterY);
+  } else if (floor.minX !== undefined && floor.minY !== undefined) {
+    expectedMinX = borderMargin + floor.tx + floor.minX - 1.8;
+    expectedMinY = borderMargin + floor.ty + floor.minY - 1.8;
+  } else {
+    return { x: 0, y: 0 };
+  }
+
+  const offsetX = currentMinX - expectedMinX;
+  const offsetY = currentMinY - expectedMinY;
+
+  if (Math.abs(offsetX) < 0.05 && Math.abs(offsetY) < 0.05) {
+    return { x: 0, y: 0 };
+  }
+
+  return {
+    x: offsetX,
+    y: offsetY
+  };
+};
+
+export const createFloorLabelPath = (
+  floor: { floorNumber: number; tx: number; ty: number; minX: number; minY: number },
+  borderMargin: number,
+  offset: { x: number; y: number } = { x: 0, y: 0 }
+): DrawingPath => {
+  const labelX = borderMargin + floor.tx + floor.minX - (5 * NOMINAL_DOT_SPACING) + offset.x;
+  const labelY = borderMargin + floor.ty + floor.minY - 9.5 + offset.y;
+  const width = 6.0;
+  const height = 3.0;
+
+  return {
+    id: `unit-label-${floor.floorNumber}`,
+    points: [
+      { x: labelX, y: labelY - height },
+      { x: labelX + width, y: labelY - height },
+      { x: labelX + width, y: labelY },
+      { x: labelX, y: labelY },
+      { x: labelX, y: labelY - height }
+    ],
+    color: '#1e293b',
+    strokeWidth: 0.1,
+    tool: 'pen',
+    lineType: 'solid',
+    isHandwriting: false,
+    opacity: 1.0,
+    text: `${floor.floorNumber}F`,
+    fontSize: 2.5
+  };
+};
+

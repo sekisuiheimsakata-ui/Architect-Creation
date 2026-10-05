@@ -13,6 +13,7 @@ import { directPrint } from './utils/print';
 import { exportSvg } from './utils/svg';
 import { generateFilename } from './utils/filenameGenerator';
 import { PartRegistrationModal } from './components/PartRegistrationModal';
+import { CopilotModal } from './components/CopilotModal';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
 const App: React.FC = () => {
@@ -71,7 +72,7 @@ const App: React.FC = () => {
   }, []);
 
   const handleSave = useCallback(() => {
-    const { present, firstFloorDeduction, stairDeductions, drawingLayers, registeredParts, controlPanelRect, propertyWindowRect } = state;
+    const { present, firstFloorDeduction, stairDeductions, drawingLayers, registeredParts, controlPanelRect, propertyWindowRect, draftingSettings } = state;
     const dataToSave = {
         grid: present,
         firstFloorDeduction,
@@ -79,7 +80,8 @@ const App: React.FC = () => {
         drawingLayers,
         registeredParts,
         controlPanelRect,
-        propertyWindowRect
+        propertyWindowRect,
+        draftingSettings
     };
     const jsonString = JSON.stringify(dataToSave, null, 2);
     const blob = new Blob([jsonString], { type: 'application/json' });
@@ -119,7 +121,8 @@ const App: React.FC = () => {
                           drawingLayers: loadedData.drawingLayers,
                           registeredParts: loadedData.registeredParts,
                           controlPanelRect: loadedData.controlPanelRect,
-                          propertyWindowRect: loadedData.propertyWindowRect
+                          propertyWindowRect: loadedData.propertyWindowRect,
+                          draftingSettings: loadedData.draftingSettings
                       }
                   });
                   // Switch mode to drafting after successful load
@@ -204,6 +207,7 @@ const App: React.FC = () => {
         <PdfOptionsModal isOpen={state.isPdfOptionsVisible} onClose={() => dispatch({ type: 'HIDE_PDF_OPTIONS' })} onConfirm={handleExportPdf} drawingLayers={state.drawingLayers} />
         <PrintOptionsModal isOpen={state.isPrintOptionsVisible} onClose={() => dispatch({ type: 'HIDE_PRINT_OPTIONS' })} onConfirm={handlePrint} drawingLayers={state.drawingLayers} />
         <SvgOptionsModal isOpen={state.isSvgOptionsVisible} onClose={() => dispatch({ type: 'HIDE_SVG_OPTIONS' })} onConfirm={handleExportSvg} drawingLayers={state.drawingLayers} />
+        <CopilotModal isOpen={state.isCopilotModalVisible} onClose={() => dispatch({ type: 'HIDE_COPILOT_MODAL' })} state={state} />
         <DraftingSettingsModal isOpen={state.isDraftingSettingsVisible} onClose={() => dispatch({ type: 'HIDE_DRAFTING_SETTINGS' })} onConfirm={handleSetDraftingSettings} currentSettings={state.draftingSettings} />
         
         {/* Hidden File Input */}

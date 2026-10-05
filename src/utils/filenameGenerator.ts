@@ -3,7 +3,7 @@ import { AppState } from '../types';
 import { PaperSize, PaperOrientation } from '../components/PrintLayout';
 import { calculateArea } from './areaCalculator';
 
-export const generateFilename = (state: AppState, extension: 'json' | 'pdf' | 'svg', pdfOptions?: { size: PaperSize, orientation: PaperOrientation }): string => {
+export const generateFilename = (state: AppState, extension: 'json' | 'pdf' | 'svg' | 'png', pdfOptions?: { size: PaperSize, orientation: PaperOrientation }): string => {
     const { present, firstFloorDeduction, stairDeductions } = state;
     const areaResult = calculateArea(present, firstFloorDeduction, stairDeductions);
     
@@ -49,11 +49,11 @@ export const generateFilename = (state: AppState, extension: 'json' | 'pdf' | 's
         filenameCore = `${formattedArea}${corePart}`;
     }
 
-    if ((extension === 'pdf' || extension === 'svg') && pdfOptions) {
+    if ((extension === 'pdf' || extension === 'svg' || extension === 'png') && pdfOptions) {
       const size = pdfOptions.size.toUpperCase();
       const orientation = pdfOptions.orientation === 'landscape' ? '横' : '縦';
       return `${size}_${orientation}_${filenameCore}.${extension}`;
     }
     
-    return `${filenameCore}.json`;
+    return `${filenameCore}.${extension}`;
 };
