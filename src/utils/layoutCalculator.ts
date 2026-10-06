@@ -596,16 +596,20 @@ export const calculatePdfLayoutData = (
   let drawingAreaX, drawingAreaY, gap;
   if (isLandscape) {
     const idealGap = (availableWidth - totalContentWidth) / (numFloors + 1);
-    gap = Math.max(8 * NOMINAL_DOT_SPACING, Math.floor(idealGap / NOMINAL_DOT_SPACING) * NOMINAL_DOT_SPACING);
+    gap = idealGap >= 8 * NOMINAL_DOT_SPACING
+      ? Math.floor(idealGap / NOMINAL_DOT_SPACING) * NOMINAL_DOT_SPACING
+      : Math.max(2 * NOMINAL_DOT_SPACING, Math.floor(idealGap / NOMINAL_DOT_SPACING) * NOMINAL_DOT_SPACING);
     const finalOverallWidth = totalContentWidth + (numFloors > 1 ? (numFloors - 1) * gap : 0);
-    drawingAreaX = (availableWidth - finalOverallWidth) / 2;
-    drawingAreaY = (availableHeight - overallBuildingHeight) / 2;
+    drawingAreaX = Math.max(0, (availableWidth - finalOverallWidth) / 2);
+    drawingAreaY = Math.max(0, (availableHeight - overallBuildingHeight) / 2);
   } else {
     const idealGap = (availableHeight - totalContentHeight) / (numFloors + 1);
-    gap = Math.max(8 * NOMINAL_DOT_SPACING, Math.floor(idealGap / NOMINAL_DOT_SPACING) * NOMINAL_DOT_SPACING);
+    gap = idealGap >= 8 * NOMINAL_DOT_SPACING
+      ? Math.floor(idealGap / NOMINAL_DOT_SPACING) * NOMINAL_DOT_SPACING
+      : Math.max(2 * NOMINAL_DOT_SPACING, Math.floor(idealGap / NOMINAL_DOT_SPACING) * NOMINAL_DOT_SPACING);
     const finalOverallHeight = totalContentHeight + (numFloors > 1 ? (numFloors - 1) * gap : 0);
-    drawingAreaY = (availableHeight - finalOverallHeight) / 2;
-    drawingAreaX = (availableWidth - overallBuildingWidth) / 2;
+    drawingAreaY = Math.max(0, (availableHeight - finalOverallHeight) / 2);
+    drawingAreaX = Math.max(0, (availableWidth - overallBuildingWidth) / 2);
   }
 
   let currentOffset = isLandscape ? drawingAreaX : drawingAreaY;
@@ -691,7 +695,13 @@ export const getFloorOffset = (
   );
 
   // 2. Fallback for legacy JSON files where paths did not have floorNumber in ID
-  if (floorPaths.length === 0) {
+  // Only apply fallback if NO tagged unit paths exist in the layer at all.
+  // If tagged paths exist for any floor, then this floor having 0 paths simply means it's newly placed.
+  const hasTaggedUnitPaths = unitLayer.paths.some(p => 
+    p.id.startsWith('unit-wall-') || p.id.startsWith('unit-pillar-')
+  );
+
+  if (floorPaths.length === 0 && !hasTaggedUnitPaths) {
     const legacyPaths = unitLayer.paths.filter(p => 
       !p.id.startsWith('unit-label-') && !p.id.startsWith('frame-')
     );
@@ -704,7 +714,7 @@ export const getFloorOffset = (
         if (!pts || pts.length === 0) return false;
         const pCenterX = pts.reduce((sum, pt) => sum + pt.x, 0) / pts.length;
         const pCenterY = pts.reduce((sum, pt) => sum + pt.y, 0) / pts.length;
-        return Math.hypot(pCenterX - expectedCenterX, pCenterY - expectedCenterY) < 250;
+        return Math.hypot(pCenterX - expectedCenterX, pCenterY - expectedCenterY) < 50;
       });
     }
   }

@@ -49,7 +49,8 @@ const createUnitLayer = (
     stairDeductions: AppState['stairDeductions'],
     size: PaperSize, 
     orientation: PaperOrientation,
-    existingLayers?: DrawingLayer[]
+    existingLayers?: DrawingLayer[],
+    preserveOffsets: boolean = false
 ): DrawingLayer => {
     const { width, height } = PAGE_DIMENSIONS[size][orientation];
     const layoutData = calculatePdfLayoutData(present, firstFloorDeduction, stairDeductions, width, height);
@@ -61,7 +62,7 @@ const createUnitLayer = (
     const existingUnitLayer = existingLayers?.find(l => l.id === 1001 || l.name === 'ユニット配置');
 
     layoutData.positionedFloors.forEach(floor => {
-        const floorOffset = getFloorOffset(existingLayers, floor, BORDER_MARGIN);
+        const floorOffset = preserveOffsets ? getFloorOffset(existingLayers, floor, BORDER_MARGIN) : { x: 0, y: 0 };
         const tx = BORDER_MARGIN + floor.tx + floorOffset.x;
         const ty = BORDER_MARGIN + floor.ty + floorOffset.y;
 
@@ -101,7 +102,7 @@ const createUnitLayer = (
         // Floor Number Label (e.g. 1F, 2F, 3F)
         // If user already moved the label, keep their custom moved position!
         const existingLabel = existingUnitLayer?.paths.find(p => p.id === `unit-label-${floor.floorNumber}`);
-        if (existingLabel) {
+        if (preserveOffsets && existingLabel) {
             paths.push(existingLabel);
         } else {
             paths.push(createFloorLabelPath(floor, BORDER_MARGIN, floorOffset));
@@ -186,9 +187,10 @@ const updateSystemLayers = (
     firstFloorDeduction: AppState['firstFloorDeduction'],
     stairDeductions: AppState['stairDeductions'],
     size: PaperSize, 
-    orientation: PaperOrientation
+    orientation: PaperOrientation,
+    preserveOffsets: boolean = false
 ): DrawingLayer[] => {
-    const unitLayerContent = createUnitLayer(present, firstFloorDeduction, stairDeductions, size, orientation, layers);
+    const unitLayerContent = createUnitLayer(present, firstFloorDeduction, stairDeductions, size, orientation, layers, preserveOffsets);
     const frameLayerContent = createFrameLayer(size, orientation);
     
     // Check by ID first (robustness for renamed layers), then by Name (legacy support)
@@ -506,7 +508,8 @@ const handleLoadState = (state: AppState, payload: any): AppState => {
         const generatedUnitLayer = createUnitLayer(
             sanitizedGrid, migratedFirstFloorDeduction, migratedStairDeductions,
             effectiveDraftingSettings.size, effectiveDraftingSettings.orientation,
-            loadedDrawingLayers
+            loadedDrawingLayers,
+            true
         );
         if (existingUnitIndex !== -1) {
             loadedDrawingLayers[existingUnitIndex] = generatedUnitLayer;
@@ -715,7 +718,7 @@ export function appReducer(state: AppState, action: Action): AppState {
         const { size, orientation } = action.payload;
         const newLayers = updateSystemLayers(
             state.drawingLayers, state.present, state.firstFloorDeduction, state.stairDeductions,
-            size, orientation
+            size, orientation, true
         );
         return { 
             ...state, 
