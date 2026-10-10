@@ -290,3 +290,207 @@ export const generateSvgArc = (center: DrawingPoint, radius: number, startAngle:
     
     return `M ${start.x} ${start.y} A ${radius} ${radius} 0 ${largeArcFlag} ${sweepFlag} ${end.x} ${end.y}`;
 };
+
+export interface CleanPointsOptions {
+    /** Threshold in mm to merge identical consecutive points (default: 0.05) */
+    duplicateTolerance?: number;
+    /** Threshold in mm to consider a loop closed if endpoints are close (default: 0.6) */
+    closureTolerance?: number;
+    /** Threshold in mm for detecting and collapsing double-vertex micro-segments at corners (default: 0.45) */
+    cornerDoubleVertexThreshold?: number;
+    /** Collinear distance threshold in mm to eliminate redundant points on straight lines (default: 0.02) */
+    collinearTolerance?: number;
+    /** Whether the path is known to be closed (e.g. from polygon or SVG Z) */
+    isClosed?: boolean;
+}
+
+/**
+ * Cleans and normalizes polygon/path vertices.
+ * Resolves the "two points forming a double corner" issue by:
+ * 1. Removing identical / micro-distance consecutive duplicates
+ * 2. Unifying closed loop start/end vertices
+ * 3. Collapsing micro-segment double corners into a single clean corner vertex (via line intersection or midpoint)
+ * 4. Eliminating redundant collinear points along straight segments
+ */
+export const cleanAndNormalizePoints = (
+    points: DrawingPoint[],
+    options: CleanPointsOptions = {}
+): DrawingPoint[] => {
+    if (!points || points.length <= 1) return points ? [...points] : [];
+
+    const duplicateTol = options.duplicateTolerance ?? 0.05;
+    const closureTol = options.closureTolerance ?? 0.6;
+    const cornerThreshold = options.cornerDoubleVertexThreshold ?? 0.45;
+    const collinearTol = options.collinearTolerance ?? 0.02;
+
+    // Phase 1: Deduplicate consecutive identical or near-identical points
+    let current: DrawingPoint[] = [points[0]];
+    for (let i = 1; i < points.length; i++) {
+        const prev = current[current.length - 1];
+        const p = points[i];
+        const d = Math.hypot(p.x - prev.x, p.y - prev.y);
+        if (d >= duplicateTol) {
+            current.push(p);
+        } else if (p.isCurve && !prev.isCurve) {
+            current[current.length - 1] = { ...prev, isCurve: true };
+        }
+    }
+
+    if (current.length <= 1) return current;
+
+    // Phase 2: Detect closure and clean closure artifacts
+    const first = current[0];
+    const last = current[current.length - 1];
+    const endDist = Math.hypot(last.x - first.x, last.y - first.y);
+    const isClosed = options.isClosed || endDist <= closureTol;
+
+    if (isClosed && current.length >= 3) {
+        // Snap last point exactly to first point
+        current[current.length - 1] = { ...first };
+
+        // If penultimate point is also right at the first point, remove it
+        while (current.length > 3) {
+            const penult = current[current.length - 2];
+            if (Math.hypot(penult.x - first.x, penult.y - first.y) < duplicateTol) {
+                current.splice(current.length - 2, 1);
+            } else {
+                break;
+            }
+        }
+
+        // If second point is right at the first point, remove it
+        while (current.length > 3) {
+            const second = current[1];
+            if (Math.hypot(second.x - first.x, second.y - first.y) < duplicateTol) {
+                current.splice(1, 1);
+            } else {
+                break;
+            }
+        }
+    }
+
+    // Phase 3: Solve double-vertex corners (micro-segments at corners)
+    // Look for A -> B -> C -> D where B -> C is a micro-segment between two substantial edges
+    let changed = true;
+    let maxPasses = 5;
+    while (changed && maxPasses-- > 0 && current.length >= 4) {
+        changed = false;
+        const next: DrawingPoint[] = [];
+        let i = 0;
+        const n = isClosed ? current.length - 1 : current.length;
+
+        while (i < n) {
+            const pB = current[i];
+            const pC = current[(i + 1) % n];
+            const segLen = Math.hypot(pC.x - pB.x, pC.y - pB.y);
+
+            // If B->C is a micro-segment connecting two edges
+            if (segLen > 0 && segLen <= cornerThreshold && !pB.isCurve && !pC.isCurve) {
+                const prevIdx = (i - 1 + n) % n;
+                const nextIdx = (i + 2) % n;
+
+                const pA = current[prevIdx];
+                const pD = current[nextIdx];
+
+                const lenAB = Math.hypot(pB.x - pA.x, pB.y - pA.y);
+                const lenCD = Math.hypot(pD.x - pC.x, pD.y - pC.y);
+
+                // Both surrounding edges should be substantial
+                if (lenAB > segLen * 1.2 && lenCD > segLen * 1.2) {
+                    const vAB = { x: (pB.x - pA.x) / lenAB, y: (pB.y - pA.y) / lenAB };
+                    const vCD = { x: (pD.x - pC.x) / lenCD, y: (pD.y - pC.y) / lenCD };
+                    const det = vAB.x * vCD.y - vAB.y * vCD.x;
+
+                    let mergedPoint: DrawingPoint;
+                    if (Math.abs(det) > 0.05) {
+                        // Lines intersect: compute intersection of ray(A, vAB) and ray(C, vCD)
+                        const dx = pC.x - pA.x;
+                        const dy = pC.y - pA.y;
+                        const t = (dx * vCD.y - dy * vCD.x) / det;
+                        const intX = pA.x + t * vAB.x;
+                        const intY = pA.y + t * vAB.y;
+                        const distToInt = Math.max(
+                            Math.hypot(intX - pB.x, intY - pB.y),
+                            Math.hypot(intX - pC.x, intY - pC.y)
+                        );
+                        if (distToInt <= 1.2) {
+                            mergedPoint = { x: intX, y: intY };
+                        } else {
+                            mergedPoint = { x: (pB.x + pC.x) / 2, y: (pB.y + pC.y) / 2 };
+                        }
+                    } else {
+                        // Nearly parallel: merge to midpoint
+                        mergedPoint = { x: (pB.x + pC.x) / 2, y: (pB.y + pC.y) / 2 };
+                    }
+
+                    next.push(mergedPoint);
+                    i += 2;
+                    changed = true;
+                    continue;
+                }
+            }
+
+            next.push(pB);
+            i++;
+        }
+
+        if (isClosed) {
+            if (next.length > 0) {
+                next.push({ ...next[0] });
+            }
+        }
+        current = next;
+    }
+
+    // Phase 4: Collinear redundant point removal along straight edges
+    if (current.length >= 3) {
+        let collPasses = 5;
+        let collChanged = true;
+        while (collChanged && collPasses-- > 0 && current.length >= 3) {
+            collChanged = false;
+            const cleaned: DrawingPoint[] = [current[0]];
+            const total = isClosed ? current.length - 1 : current.length;
+
+            for (let i = 1; i < total; i++) {
+                const prev = cleaned[cleaned.length - 1];
+                const curr = current[i];
+                const next = current[(i + 1) % total];
+
+                if (curr.isCurve || prev.isCurve || next.isCurve) {
+                    cleaned.push(curr);
+                    continue;
+                }
+
+                const dx = next.x - prev.x;
+                const dy = next.y - prev.y;
+                const len = Math.hypot(dx, dy);
+
+                if (len < 1e-6) {
+                    collChanged = true;
+                    continue;
+                }
+
+                // Cross product / perpendicular distance
+                const cross = Math.abs((curr.x - prev.x) * dy - (curr.y - prev.y) * dx);
+                const h = cross / len;
+
+                // Dot product projection
+                const dot = (curr.x - prev.x) * dx + (curr.y - prev.y) * dy;
+                const t = dot / (len * len);
+
+                if (h < collinearTol && t > 0 && t < 1) {
+                    collChanged = true;
+                } else {
+                    cleaned.push(curr);
+                }
+            }
+
+            if (isClosed) {
+                cleaned.push({ ...cleaned[0] });
+            }
+            current = cleaned;
+        }
+    }
+
+    return current;
+};

@@ -360,16 +360,33 @@ export const DraftingCanvas: React.FC = () => {
             return;
         }
 
-        const isSelected = stateRef.current.selectedPathIds.includes(clickedPath.id);
+        let targetPathIds = [clickedPath.id];
+        const floorMatch = clickedPath.id.match(/^unit-(?:wall|pillar|label)-(\d+)/);
+        if (floorMatch) {
+            const floorNum = floorMatch[1];
+            const unitLayer = stateRef.current.drawingLayers.find(l => l.id === 1001 || l.name === 'ユニット配置');
+            if (unitLayer) {
+                const floorPaths = unitLayer.paths.filter(p => 
+                    p.id.startsWith(`unit-wall-${floorNum}-`) ||
+                    p.id.startsWith(`unit-pillar-${floorNum}-`) ||
+                    p.id.startsWith(`unit-label-${floorNum}`)
+                );
+                if (floorPaths.length > 0) {
+                    targetPathIds = floorPaths.map(p => p.id);
+                }
+            }
+        }
+
+        const isSelected = targetPathIds.every(id => stateRef.current.selectedPathIds.includes(id));
         if (e.shiftKey) {
-            dispatch({ type: 'SELECT_PATHS', payload: { pathIds: [clickedPath.id], additive: true } });
+            dispatch({ type: 'SELECT_PATHS', payload: { pathIds: targetPathIds, additive: true } });
         } else if (!isSelected) {
-            dispatch({ type: 'SELECT_PATHS', payload: { pathIds: [clickedPath.id], additive: false } });
+            dispatch({ type: 'SELECT_PATHS', payload: { pathIds: targetPathIds, additive: false } });
         }
 
         const currentSelection = e.shiftKey 
-            ? [...stateRef.current.selectedPathIds, clickedPath.id] 
-            : (isSelected ? stateRef.current.selectedPathIds : [clickedPath.id]);
+            ? [...stateRef.current.selectedPathIds, ...targetPathIds] 
+            : (isSelected ? stateRef.current.selectedPathIds : targetPathIds);
         
         const selectedPaths = stateRef.current.drawingLayers.flatMap(l => l.paths).filter(p => currentSelection.includes(p.id));
         const candidates = getAllVertices(selectedPaths);
@@ -1051,7 +1068,7 @@ export const DraftingCanvas: React.FC = () => {
             </filter>
         </defs>
 
-        <PdfLayout state={state} pageWidth={pageWidth} pageHeight={pageHeight} renderAsRootSvg={false} />
+        <PdfLayout state={state} pageWidth={pageWidth} pageHeight={pageHeight} renderAsRootSvg={false} moveOperation={moveOperation} />
 
         <g id="interaction-overlay">
             {/* Hover Effect */}
@@ -1100,13 +1117,15 @@ export const DraftingCanvas: React.FC = () => {
 
                     if (path.text) {
                         const bounds = getPointsBounds(finalPoints);
+                        const fs = path.fontSize || 2.2;
                         return (
                             <g key={`ghost-${id}`}>
                                 <text
                                     x={bounds.x}
-                                    y={bounds.y + bounds.height}
+                                    y={bounds.y + fs * 0.85}
                                     fill={HOVER_HIGHLIGHT_COLOR}
-                                    style={{ fontSize: `${path.fontSize || 2.5}mm`, fontWeight: 'bold' }}
+                                    fontSize={fs}
+                                    fontWeight="bold"
                                     opacity={0.8}
                                     pointerEvents="none"
                                 >

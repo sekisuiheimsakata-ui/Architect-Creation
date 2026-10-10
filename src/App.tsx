@@ -14,6 +14,9 @@ import { exportSvg } from './utils/svg';
 import { generateFilename } from './utils/filenameGenerator';
 import { PartRegistrationModal } from './components/PartRegistrationModal';
 import { CopilotModal } from './components/CopilotModal';
+import { CadImportModal } from './components/CadImportModal';
+import { DxfOptionsModal } from './components/DxfOptionsModal';
+import { exportDxf, DxfExportOptions } from './utils/dxfExport';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
 const App: React.FC = () => {
@@ -60,6 +63,11 @@ const App: React.FC = () => {
   const handleExportSvg = useCallback(async (options: { size: PaperSize; orientation: PaperOrientation; includedLayers: number[] }) => {
       await exportSvg(state, options);
       dispatch({ type: 'HIDE_SVG_OPTIONS' });
+  }, [state]);
+
+  const handleExportDxf = useCallback(async (options: DxfExportOptions) => {
+      await exportDxf(state, options);
+      dispatch({ type: 'HIDE_DXF_OPTIONS' });
   }, [state]);
   
   const handlePrint = useCallback(async (options: { size: PaperSize; orientation: PaperOrientation; includedLayers: number[] }) => {
@@ -207,8 +215,17 @@ const App: React.FC = () => {
         <PdfOptionsModal isOpen={state.isPdfOptionsVisible} onClose={() => dispatch({ type: 'HIDE_PDF_OPTIONS' })} onConfirm={handleExportPdf} drawingLayers={state.drawingLayers} />
         <PrintOptionsModal isOpen={state.isPrintOptionsVisible} onClose={() => dispatch({ type: 'HIDE_PRINT_OPTIONS' })} onConfirm={handlePrint} drawingLayers={state.drawingLayers} />
         <SvgOptionsModal isOpen={state.isSvgOptionsVisible} onClose={() => dispatch({ type: 'HIDE_SVG_OPTIONS' })} onConfirm={handleExportSvg} drawingLayers={state.drawingLayers} />
+        <DxfOptionsModal 
+            isOpen={state.isDxfOptionsVisible} 
+            onClose={() => dispatch({ type: 'HIDE_DXF_OPTIONS' })} 
+            onConfirm={handleExportDxf} 
+            drawingLayers={state.drawingLayers} 
+            currentSize={state.draftingSettings.size}
+            currentOrientation={state.draftingSettings.orientation}
+        />
         <CopilotModal isOpen={state.isCopilotModalVisible} onClose={() => dispatch({ type: 'HIDE_COPILOT_MODAL' })} state={state} />
         <DraftingSettingsModal isOpen={state.isDraftingSettingsVisible} onClose={() => dispatch({ type: 'HIDE_DRAFTING_SETTINGS' })} onConfirm={handleSetDraftingSettings} currentSettings={state.draftingSettings} />
+        <CadImportModal isOpen={state.isCadImportModalVisible} onClose={() => dispatch({ type: 'HIDE_CAD_IMPORT_MODAL' })} />
         
         {/* Hidden File Input */}
         <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".json" className="hidden" aria-hidden="true" />

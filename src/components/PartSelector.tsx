@@ -5,6 +5,7 @@ import { RegisteredPart } from '../types';
 import { ChevronDownIcon, TrashIcon, HelpPencilIcon, SvgIcon, DragHandleIcon, UploadIcon, SaveIcon, FolderIcon, FolderOpenIcon, FolderPlusIcon } from './Icons';
 import { pointsToSvgPath, getPathAsPoints } from '../utils/layoutCalculator';
 import { exportPartToSvg, parsePartFromSvgString } from '../utils/svg';
+import { parsePartFromDxfString, isDxfContent } from '../utils/dxf';
 import { exportPartsToZip, importPartsFromZip } from '../utils/zip';
 import { InputModal } from './InputModal';
 import { ConfirmModal } from './ConfirmModal';
@@ -456,6 +457,21 @@ export const PartSelector: React.FC = () => {
     }, [dispatch]);
 
     // Import/Export Handlers
+    const readFileText = async (file: File): Promise<string> => {
+        const buffer = await file.arrayBuffer();
+        try {
+            const utf8Decoder = new TextDecoder('utf-8', { fatal: true });
+            return utf8Decoder.decode(buffer);
+        } catch {
+            try {
+                const sjisDecoder = new TextDecoder('shift_jis');
+                return sjisDecoder.decode(buffer);
+            } catch {
+                return new TextDecoder().decode(buffer);
+            }
+        }
+    };
+
     const handleImportParts = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
         const files = event.target.files;
         if (!files || files.length === 0) return;
@@ -463,13 +479,23 @@ export const PartSelector: React.FC = () => {
         let successCount = 0;
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
-            if (file.name.toLowerCase().endsWith('.zip')) {
+            const lowerName = file.name.toLowerCase();
+            if (lowerName.endsWith('.zip')) {
                 try {
                     const parts = await importPartsFromZip(file);
                     newParts.push(...parts);
                     successCount += parts.length;
                 } catch (e) { console.error(`Failed to import zip: ${file.name}`, e); }
-            } else if (file.name.toLowerCase().endsWith('.svg')) {
+            } else if (lowerName.endsWith('.dxf')) {
+                try {
+                    const text = await readFileText(file);
+                    const part = parsePartFromDxfString(text, file.name);
+                    if (part) {
+                        newParts.push(part);
+                        successCount++;
+                    }
+                } catch (e) { console.error(`Failed to import dxf: ${file.name}`, e); }
+            } else if (lowerName.endsWith('.svg')) {
                 try {
                     const text = await file.text();
                     const part = parsePartFromSvgString(text);
@@ -480,6 +506,25 @@ export const PartSelector: React.FC = () => {
                         successCount++;
                     }
                 } catch (e) { console.error(`Failed to import svg: ${file.name}`, e); }
+            } else {
+                // Auto-detect format by content
+                try {
+                    const text = await readFileText(file);
+                    if (isDxfContent(text)) {
+                        const part = parsePartFromDxfString(text, file.name);
+                        if (part) {
+                            newParts.push(part);
+                            successCount++;
+                        }
+                    } else if (text.includes('<svg')) {
+                        const part = parsePartFromSvgString(text);
+                        if (part) {
+                            part.id = `part-${Date.now()}-${Math.random()}`;
+                            newParts.push(part);
+                            successCount++;
+                        }
+                    }
+                } catch (e) { console.error(`Failed to inspect file: ${file.name}`, e); }
             }
         }
         if (newParts.length > 0) {
@@ -553,10 +598,10 @@ export const PartSelector: React.FC = () => {
                 <h3 className="text-xs font-bold text-slate-600 shrink-0">パーツ</h3>
                 <div className="flex items-center space-x-0.5 justify-end flex-grow min-w-0" onClick={e => e.stopPropagation()}>
                     <div className="flex items-center space-x-0.5 shrink-0">
-                        <HeaderIconButton onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }} title="読込 (ZIP/SVG)">
+                        <HeaderIconButton onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }} title="読込 (ZIP/SVG/DXF)">
                             <UploadIcon className="w-4 h-4" />
                         </HeaderIconButton>
-                        <input type="file" ref={fileInputRef} onChange={handleImportParts} accept=".zip,.svg" multiple className="hidden" />
+                        <input type="file" ref={fileInputRef} onChange={handleImportParts} accept=".zip,.svg,.dxf,.DXF" multiple className="hidden" />
                         <HeaderIconButton onClick={(e) => { e.stopPropagation(); if(partCount > 0) exportPartsToZip(registeredParts); }} disabled={partCount === 0} title="書出 (ZIP)">
                             <SaveIcon className="w-4 h-4" />
                         </HeaderIconButton>

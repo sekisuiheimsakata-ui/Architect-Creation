@@ -13,7 +13,7 @@ import {
     PrintIcon, PdfIcon, SvgIcon, TuneIcon, HelpIcon,
     AllIcon, Floor1Icon, Floor2Icon, Floor3Icon, UndoIcon, RedoIcon, PlusIcon, MinusIcon,
     PanZoomIcon, SelectIcon, RegisterPartIcon, KbdIcon, LayerIcon, HelpPencilIcon,
-    ChevronDownIcon, FilePlusIcon, TrashIcon, SparklesIcon
+    ChevronDownIcon, FilePlusIcon, TrashIcon, SparklesIcon, CadImportIcon
 } from './Icons';
 
 // --- Sub Components ---
@@ -79,6 +79,7 @@ const FileTabContent: React.FC<{ onAction: (type: string) => void }> = ({ onActi
         <div className="space-y-2">
             <FileActionButton onClick={() => onAction('NEW')} icon={<FilePlusIcon className="w-4 h-4"/>} label="新規作成" />
             <FileActionButton onClick={() => onAction('LOAD')} icon={<LoadIcon className="w-4 h-4"/>} label="読込" />
+            <FileActionButton onClick={() => onAction('CAD_IMPORT')} icon={<CadImportIcon className="w-4 h-4 text-sky-600"/>} label="DXF・SVG読込" />
             <FileActionButton onClick={() => onAction('SAVE')} icon={<SaveIcon className="w-4 h-4"/>} label="保存" />
         </div>
 
@@ -87,6 +88,12 @@ const FileTabContent: React.FC<{ onAction: (type: string) => void }> = ({ onActi
             <FileActionButton onClick={() => onAction('PRINT')} icon={<PrintIcon className="w-4 h-4"/>} label="印刷" />
             <FileActionButton onClick={() => onAction('PDF')} icon={<PdfIcon className="w-4 h-4"/>} label="PDF出力" />
             <FileActionButton onClick={() => onAction('SVG')} icon={<SvgIcon className="w-4 h-4"/>} label="SVG出力" />
+            <FileActionButton 
+                onClick={() => onAction('DXF')} 
+                icon={<CadImportIcon className="w-4 h-4 text-emerald-600"/>} 
+                label="DXF保存 (.dxf)" 
+                colorClass="text-emerald-900 bg-emerald-50/70 hover:bg-emerald-100 hover:border-emerald-300 border-emerald-200 shadow-xs font-medium" 
+            />
         </div>
 
         <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider border-b pb-1 mt-4">AI・画像加工</h3>
@@ -265,10 +272,12 @@ export const ControlPanel: React.FC<ControlPanelProps> = memo(({ isOpen, onClose
             case 'LOAD': 
                 onLoad(); 
                 return; // Don't auto switch yet, wait for file load
+            case 'CAD_IMPORT': dispatch({ type: 'SHOW_CAD_IMPORT_MODAL' }); break;
             case 'SAVE': onSave(); break;
             case 'PRINT': dispatch({ type: 'SHOW_PRINT_OPTIONS' }); break;
             case 'PDF': dispatch({ type: 'SHOW_PDF_OPTIONS' }); break;
             case 'SVG': dispatch({ type: 'SHOW_SVG_OPTIONS' }); break;
+            case 'DXF': dispatch({ type: 'SHOW_DXF_OPTIONS' }); break;
             case 'COPILOT': dispatch({ type: 'SHOW_COPILOT_MODAL' }); break;
             case 'SETTINGS': dispatch({ type: 'SHOW_DRAFTING_SETTINGS' }); break;
             case 'CLEAR_UNITS': dispatch({ type: 'SHOW_CLEAR_UNITS_CONFIRM' }); break;

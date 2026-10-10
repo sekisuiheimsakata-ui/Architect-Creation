@@ -157,7 +157,9 @@ export interface AppState {
   isPdfOptionsVisible: boolean;
   isPrintOptionsVisible: boolean;
   isSvgOptionsVisible: boolean;
+  isDxfOptionsVisible: boolean;
   isCopilotModalVisible: boolean;
+  isCadImportModalVisible: boolean;
   firstFloorDeduction: DeductionOption | null;
   stairDeductions: { [floorNumber: number]: DeductionOption | null };
   mode: AppMode;
@@ -230,6 +232,8 @@ export type Action =
   | { type: 'HIDE_PRINT_OPTIONS' }
   | { type: 'SHOW_SVG_OPTIONS' }
   | { type: 'HIDE_SVG_OPTIONS' }
+  | { type: 'SHOW_DXF_OPTIONS' }
+  | { type: 'HIDE_DXF_OPTIONS' }
   | { type: 'SHOW_COPILOT_MODAL' }
   | { type: 'HIDE_COPILOT_MODAL' }
   | { type: 'SET_DEDUCTION', payload: DeductionOption | null }
@@ -309,7 +313,10 @@ export type Action =
   | { type: 'MOVE_FOLDER'; payload: { sourcePath: string; targetPath: string } }
   | { type: 'ROTATE_PART'; payload: number }
   | { type: 'FLIP_PART'; payload: 'horizontal' | 'vertical' }
-  | { type: 'SCALE_PART'; payload: number };
+  | { type: 'SCALE_PART'; payload: number }
+  | { type: 'SHOW_CAD_IMPORT_MODAL' }
+  | { type: 'HIDE_CAD_IMPORT_MODAL' }
+  | { type: 'IMPORT_CAD_LAYER'; payload: { name: string; paths: DrawingPath[] } };
 
 
 declare global {

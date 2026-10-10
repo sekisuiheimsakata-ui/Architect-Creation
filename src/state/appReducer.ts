@@ -113,7 +113,7 @@ const createUnitLayer = (
         id: 1001, // Fixed ID for Unit Layer
         name: 'ユニット配置',
         visibility: 'visible' as LayerVisibility,
-        isLocked: true, // Unit layer is managed by system, conceptually locked for drawing
+        isLocked: false, // Unlocked so user can select, move, and rotate units in drafting mode
         paths: paths
     };
 };
@@ -144,7 +144,9 @@ export const initialState: AppState = {
   isPdfOptionsVisible: false,
   isPrintOptionsVisible: false,
   isSvgOptionsVisible: false,
+  isDxfOptionsVisible: false,
   isCopilotModalVisible: false,
+  isCadImportModalVisible: false,
   firstFloorDeduction: null,
   stairDeductions: {},
   mode: 'drafting', // Start in drafting mode
@@ -679,8 +681,31 @@ export function appReducer(state: AppState, action: Action): AppState {
     case 'HIDE_PRINT_OPTIONS': return { ...state, isPrintOptionsVisible: false };
     case 'SHOW_SVG_OPTIONS': return { ...state, isSvgOptionsVisible: true };
     case 'HIDE_SVG_OPTIONS': return { ...state, isSvgOptionsVisible: false };
+    case 'SHOW_DXF_OPTIONS': return { ...state, isDxfOptionsVisible: true };
+    case 'HIDE_DXF_OPTIONS': return { ...state, isDxfOptionsVisible: false };
     case 'SHOW_COPILOT_MODAL': return { ...state, isCopilotModalVisible: true };
     case 'HIDE_COPILOT_MODAL': return { ...state, isCopilotModalVisible: false };
+    case 'SHOW_CAD_IMPORT_MODAL': return { ...state, isCadImportModalVisible: true };
+    case 'HIDE_CAD_IMPORT_MODAL': return { ...state, isCadImportModalVisible: false };
+    case 'IMPORT_CAD_LAYER': {
+        const { name, paths } = action.payload;
+        const newLayer: DrawingLayer = {
+            id: Date.now(),
+            name,
+            paths,
+            visibility: 'visible',
+            isLocked: false,
+        };
+        return {
+            ...state,
+            drawingLayers: [...state.drawingLayers, newLayer],
+            activeDrawingLayer: newLayer.id,
+            mode: 'drafting',
+            isCadImportModalVisible: false,
+            drawingLayersPast: [...state.drawingLayersPast, state.drawingLayers],
+            drawingLayersFuture: [],
+        };
+    }
     
     case 'SET_DEDUCTION': {
         const newState = { ...state, firstFloorDeduction: action.payload };

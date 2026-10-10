@@ -1,8 +1,15 @@
 
 
 import React, { useEffect, useRef, useMemo, memo } from 'react';
-import type { AppState, LineType } from '../types';
-import { calculatePdfLayoutData, pointsToSvgPath, getPathAsPoints, getFloorOffset } from '../utils/layoutCalculator';
+import type { AppState, LineType, DrawingPoint, PartPlacementTransform } from '../types';
+import { calculatePdfLayoutData, pointsToSvgPath, getPathAsPoints, getFloorTransform } from '../utils/layoutCalculator';
+import { transformPoints } from '../utils/geometry';
+
+interface MoveOperationProp {
+  currentSvgPos: DrawingPoint;
+  basePoint: DrawingPoint;
+  transform: PartPlacementTransform;
+}
 
 interface PdfLayoutProps {
   state: AppState;
@@ -10,6 +17,7 @@ interface PdfLayoutProps {
   pageWidth: number;
   pageHeight: number;
   renderAsRootSvg?: boolean;
+  moveOperation?: MoveOperationProp | null;
 }
 
 // Helper to get SVG dash array based on line type
@@ -24,7 +32,7 @@ const getStrokeDashArray = (lineType: LineType): string | undefined => {
 };
 
 // Separate internal component to allow memoization check on specific props
-const PdfLayoutContent: React.FC<PdfLayoutProps> = ({ state, onReady, pageWidth, pageHeight, renderAsRootSvg = true }) => {
+const PdfLayoutContent: React.FC<PdfLayoutProps> = ({ state, onReady, pageWidth, pageHeight, renderAsRootSvg = true, moveOperation }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   
   // Memoize layout calculation. 
@@ -40,7 +48,7 @@ const PdfLayoutContent: React.FC<PdfLayoutProps> = ({ state, onReady, pageWidth,
   }, [state.present, state.firstFloorDeduction, state.stairDeductions, pageWidth, pageHeight]);
 
   const svgContent = useMemo(() => {
-    const { showBaseGrid, showModuleGrid, drawingLayers } = state;
+    const { showBaseGrid, showModuleGrid, drawingLayers, selectedPathIds } = state;
 
     // Determine Unit Layer Visibility for Text Rendering (ID 1001)
     const unitLayer = drawingLayers.find(l => l.id === 1001);
@@ -81,23 +89,52 @@ const PdfLayoutContent: React.FC<PdfLayoutProps> = ({ state, onReady, pageWidth,
         const dotSpacing = NOMINAL_DOT_SPACING; // 225mm
 
         positionedFloors.forEach(floor => {
-            const floorOffset = getFloorOffset(state.drawingLayers, floor, BORDER_MARGIN);
+            let floorTransform = getFloorTransform(state.drawingLayers, floor, BORDER_MARGIN);
+
+            // If paths of this floor are being moved/rotated in real time via moveOperation
+            const isFloorMoving = moveOperation && selectedPathIds && selectedPathIds.some(id => 
+                id.startsWith(`unit-wall-${floor.floorNumber}-`) ||
+                id.startsWith(`unit-pillar-${floor.floorNumber}-`) ||
+                id.startsWith(`unit-label-${floor.floorNumber}`)
+            );
+
+            if (isFloorMoving && moveOperation) {
+                const baseTransform = floorTransform;
+                const { rotation } = moveOperation.transform;
+                const center = moveOperation.basePoint;
+                const dx = moveOperation.currentSvgPos.x - moveOperation.basePoint.x;
+                const dy = moveOperation.currentSvgPos.y - moveOperation.basePoint.y;
+
+                floorTransform = {
+                    transformPoint: (p: DrawingPoint) => {
+                        const pt = baseTransform.transformPoint(p);
+                        const rel = { x: pt.x - center.x, y: pt.y - center.y };
+                        const trans = transformPoints([rel], moveOperation.transform)[0];
+                        return { x: trans.x + center.x + dx, y: trans.y + center.y + dy };
+                    },
+                    rotation: baseTransform.rotation + rotation,
+                    offset: { x: baseTransform.offset.x + dx, y: baseTransform.offset.y + dy }
+                };
+            }
 
             floor.unitRects.forEach(unitRect => {
-                const unitOriginX = BORDER_MARGIN + floor.tx + unitRect.x + floorOffset.x;
-                const unitOriginY = BORDER_MARGIN + floor.ty + unitRect.y + floorOffset.y;
+                const baseUnitOriginX = BORDER_MARGIN + floor.tx + unitRect.x;
+                const baseUnitOriginY = BORDER_MARGIN + floor.ty + unitRect.y;
                 const unitWidth = unitRect.width;
                 const unitHeight = unitRect.height;
 
                 for (let xOffset = 0; xOffset <= unitWidth + 0.01; xOffset += moduleSpacing) {
-                    const moduleX = unitOriginX + xOffset;
                     for (let yOffset = 0; yOffset <= unitHeight + 0.01; yOffset += dotSpacing) {
-                        const dotY = unitOriginY + yOffset;
+                        const originalPoint = {
+                            x: baseUnitOriginX + xOffset,
+                            y: baseUnitOriginY + yOffset
+                        };
+                        const pt = floorTransform.transformPoint(originalPoint);
                         moduleDots.push(
                             <circle
-                                key={`md-${floor.floorNumber}-${moduleX.toFixed(2)}-${dotY.toFixed(2)}`}
-                                cx={moduleX.toFixed(2)}
-                                cy={dotY.toFixed(2)}
+                                key={`md-${floor.floorNumber}-${unitRect.r}-${unitRect.c}-${Math.round(xOffset * 100)}-${Math.round(yOffset * 100)}`}
+                                cx={pt.x.toFixed(2)}
+                                cy={pt.y.toFixed(2)}
                                 r="0.20"
                                 fill="#b0b8c4"
                             />
@@ -171,15 +208,18 @@ const PdfLayoutContent: React.FC<PdfLayoutProps> = ({ state, onReady, pageWidth,
                 {layer.paths.map((path) => {
                       if (path.text) {
                           const minX = Math.min(...path.points.map(p => p.x));
-                          const maxY = Math.max(...path.points.map(p => p.y));
+                          const minY = Math.min(...path.points.map(p => p.y));
+                          const fs = path.fontSize || 2.2;
                           return (
                               <text
                                   key={path.id}
                                   x={minX}
-                                  y={maxY}
-                                  className="header-text"
+                                  y={minY + fs * 0.85}
                                   fill={path.color || '#1e293b'}
-                                  style={{ fontSize: `${path.fontSize || 2.5}mm`, fontWeight: 'bold', userSelect: 'none' }}
+                                  fontSize={fs}
+                                  fontWeight="bold"
+                                  textAnchor="start"
+                                  style={{ userSelect: 'none' }}
                               >
                                   {path.text}
                               </text>
@@ -248,7 +288,7 @@ const PdfLayoutContent: React.FC<PdfLayoutProps> = ({ state, onReady, pageWidth,
         </g>
       </>
     );
-  }, [state, pageWidth, pageHeight, layoutData]);
+  }, [state, pageWidth, pageHeight, layoutData, moveOperation]);
 
   useEffect(() => {
     if (onReady && svgRef.current) {
@@ -278,9 +318,11 @@ export const PdfLayout = memo(PdfLayoutContent, (prev, next) => {
         prev.pageWidth === next.pageWidth &&
         prev.pageHeight === next.pageHeight &&
         prev.renderAsRootSvg === next.renderAsRootSvg &&
+        prev.moveOperation === next.moveOperation &&
         // Check relevant state slices
         prev.state.present === next.state.present &&
         prev.state.drawingLayers === next.state.drawingLayers &&
+        prev.state.selectedPathIds === next.state.selectedPathIds &&
         prev.state.firstFloorDeduction === next.state.firstFloorDeduction &&
         prev.state.stairDeductions === next.state.stairDeductions &&
         prev.state.showBaseGrid === next.state.showBaseGrid &&

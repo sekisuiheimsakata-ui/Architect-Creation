@@ -135,6 +135,9 @@ export function pointsToSvgPath(points: DrawingPoint[], isHandwriting: boolean):
   if (processedPoints.length === 0) return "";
   if (processedPoints.length === 1) return `M ${processedPoints[0].x} ${processedPoints[0].y} l 0.001 0`;
 
+  const isClosedLoop = processedPoints.length >= 3 &&
+    Math.hypot(processedPoints[0].x - processedPoints[processedPoints.length - 1].x, processedPoints[0].y - processedPoints[processedPoints.length - 1].y) < 0.05;
+
   let d = `M ${processedPoints[0].x} ${processedPoints[0].y}`;
   let i = 0;
   while (i < processedPoints.length) {
@@ -155,7 +158,13 @@ export function pointsToSvgPath(points: DrawingPoint[], isHandwriting: boolean):
       }
       i++;
     } else {
-      if (i > 0) d += ` L ${processedPoints[i].x} ${processedPoints[i].y}`;
+      if (i > 0) {
+        if (isClosedLoop && i === processedPoints.length - 1) {
+          d += ' Z';
+        } else {
+          d += ` L ${processedPoints[i].x} ${processedPoints[i].y}`;
+        }
+      }
       i++;
     }
   }
@@ -665,6 +674,130 @@ export const calculateViewBoundingBox = (
       y: globalMinY, 
       width: globalMaxX - globalMinX, 
       height: globalMaxY - globalMinY 
+  };
+};
+
+export interface FloorTransform {
+  transformPoint: (point: DrawingPoint) => DrawingPoint;
+  rotation: number;
+  offset: { x: number; y: number };
+}
+
+export const getFloorTransform = (
+  drawingLayers: DrawingLayer[] | undefined,
+  floor: { 
+    floorNumber: number; 
+    tx: number; 
+    ty: number; 
+    minX?: number;
+    minY?: number;
+    maxX?: number;
+    maxY?: number;
+    outerWallPolygons?: { x: number; y: number }[][]; 
+  },
+  borderMargin: number
+): FloorTransform => {
+  const identity: FloorTransform = {
+    transformPoint: (p: DrawingPoint) => p,
+    rotation: 0,
+    offset: { x: 0, y: 0 }
+  };
+
+  if (!drawingLayers) return identity;
+  const unitLayer = drawingLayers.find(l => l.id === 1001 || l.name === 'ユニット配置');
+  if (!unitLayer || !unitLayer.paths || unitLayer.paths.length === 0) {
+    return identity;
+  }
+
+  // 1. Look for outer wall paths explicitly tagged with this floor number
+  let floorOuterPaths = unitLayer.paths.filter(p => 
+    p.id.startsWith(`unit-wall-${floor.floorNumber}-out-`)
+  );
+
+  // If outer wall not found, fallback to any wall paths for this floor
+  if (floorOuterPaths.length === 0) {
+    floorOuterPaths = unitLayer.paths.filter(p => 
+      p.id.startsWith(`unit-wall-${floor.floorNumber}-`)
+    );
+  }
+
+  const origX = borderMargin + floor.tx;
+  const origY = borderMargin + floor.ty;
+
+  if (
+    floorOuterPaths.length > 0 &&
+    floor.outerWallPolygons &&
+    floor.outerWallPolygons.length > 0 &&
+    floor.outerWallPolygons[0].length >= 2 &&
+    floorOuterPaths[0].points.length >= 2
+  ) {
+    const origPoints = floor.outerWallPolygons[0].map(p => ({ x: p.x + origX, y: p.y + origY }));
+    const currPoints = floorOuterPaths[0].points;
+
+    // Find the longest segment in the original polygon for maximum numerical stability
+    let bestIdx = 0;
+    let maxSegLen = 0;
+    for (let i = 0; i < Math.min(origPoints.length - 1, currPoints.length - 1); i++) {
+      const len = Math.hypot(origPoints[i + 1].x - origPoints[i].x, origPoints[i + 1].y - origPoints[i].y);
+      if (len > maxSegLen) {
+        maxSegLen = len;
+        bestIdx = i;
+      }
+    }
+
+    const dx_orig = origPoints[bestIdx + 1].x - origPoints[bestIdx].x;
+    const dy_orig = origPoints[bestIdx + 1].y - origPoints[bestIdx].y;
+    const angle_orig = Math.atan2(dy_orig, dx_orig);
+
+    const dx_curr = currPoints[bestIdx + 1].x - currPoints[bestIdx].x;
+    const dy_curr = currPoints[bestIdx + 1].y - currPoints[bestIdx].y;
+    const angle_curr = Math.atan2(dy_curr, dx_curr);
+
+    let dAngle = angle_curr - angle_orig;
+
+    // Snap to nearest 90-degree step for CAD accuracy if within tolerance
+    const snappedAngle = Math.round(dAngle / (Math.PI / 2)) * (Math.PI / 2);
+    if (Math.abs(dAngle - snappedAngle) < 0.08) {
+      dAngle = snappedAngle;
+    }
+
+    // Use geometric bounding box center instead of arithmetic mean of points.
+    // Arithmetic mean drifts because shared unit walls have clustered collinear vertices.
+    // Bounding box center is strictly invariant under orthogonal rotations.
+    const allOrigX = floor.outerWallPolygons.flatMap(poly => poly.map(p => p.x + origX));
+    const allOrigY = floor.outerWallPolygons.flatMap(poly => poly.map(p => p.y + origY));
+    const origCentroidX = (Math.min(...allOrigX) + Math.max(...allOrigX)) / 2;
+    const origCentroidY = (Math.min(...allOrigY) + Math.max(...allOrigY)) / 2;
+
+    const allCurrX = floorOuterPaths.flatMap(p => p.points.map(pt => pt.x));
+    const allCurrY = floorOuterPaths.flatMap(p => p.points.map(pt => pt.y));
+    const currCentroidX = (Math.min(...allCurrX) + Math.max(...allCurrX)) / 2;
+    const currCentroidY = (Math.min(...allCurrY) + Math.max(...allCurrY)) / 2;
+
+    const cos = Math.cos(dAngle);
+    const sin = Math.sin(dAngle);
+    const rotationDeg = (dAngle * 180) / Math.PI;
+
+    return {
+      transformPoint: (p: DrawingPoint) => {
+        const relX = p.x - origCentroidX;
+        const relY = p.y - origCentroidY;
+        return {
+          x: currCentroidX + (relX * cos - relY * sin),
+          y: currCentroidY + (relX * sin + relY * cos)
+        };
+      },
+      rotation: rotationDeg,
+      offset: { x: currCentroidX - origCentroidX, y: currCentroidY - origCentroidY }
+    };
+  }
+
+  // Fallback to getFloorOffset linear translation
+  const offset = getFloorOffset(drawingLayers, floor as any, borderMargin);
+  return {
+    transformPoint: (p: DrawingPoint) => ({ x: p.x + offset.x, y: p.y + offset.y }),
+    rotation: 0,
+    offset
   };
 };
 

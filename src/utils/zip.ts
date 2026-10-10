@@ -2,6 +2,7 @@
 import JSZip from 'jszip';
 import { RegisteredPart } from '../types';
 import { createPartSvgString, parsePartFromSvgString } from './svg';
+import { parsePartFromDxfString, isDxfContent } from './dxf';
 
 export const exportPartsToZip = async (parts: RegisteredPart[]) => {
     try {
@@ -48,25 +49,28 @@ export const importPartsFromZip = async (file: File): Promise<RegisteredPart[]> 
         const filePromises: Promise<void>[] = [];
 
         zip.forEach((relativePath, zipEntry) => {
-            if (!zipEntry.dir && zipEntry.name.endsWith('.svg')) {
+            const lowerName = zipEntry.name.toLowerCase();
+            if (!zipEntry.dir && (lowerName.endsWith('.svg') || lowerName.endsWith('.dxf'))) {
                 const promise = zipEntry.async("string").then(content => {
-                    const part = parsePartFromSvgString(content);
-                    if (part) {
-                        // Determine folder path from the zip entry path
-                        // Remove the filename to get the directory path
-                        const pathParts = relativePath.split('/');
-                        pathParts.pop(); // remove filename
-                        const folderPath = pathParts.join('/'); // Rejoin without trailing slash usually
+                    const pathParts = relativePath.split('/');
+                    const entryFileName = pathParts.pop() || zipEntry.name;
+                    const folderPath = pathParts.join('/');
 
-                        // Regenerate ID to avoid collision, but keep original name/data.
-                        // Override the sourcePath with the actual path found in the ZIP structure
+                    let part: RegisteredPart | null = null;
+                    if (lowerName.endsWith('.dxf') || isDxfContent(content)) {
+                        part = parsePartFromDxfString(content, entryFileName);
+                    } else {
+                        part = parsePartFromSvgString(content);
+                    }
+
+                    if (part) {
                         newParts.push({
                             ...part,
                             id: `part-${Date.now()}-${Math.random()}`,
                             sourcePath: folderPath
                         });
                     } else {
-                        console.warn("Skipping invalid or metadata-missing SVG in zip:", relativePath);
+                        console.warn("Skipping invalid or unreadable file in zip:", relativePath);
                     }
                 });
                 filePromises.push(promise);
