@@ -4,7 +4,7 @@ import React from 'react';
 import {
   CloseIcon, PanZoomIcon, UndoIcon, HelpSaveIcon, ModeIcon, PlaceIcon,
   DeleteIcon, CalculatorIcon, LayerIcon, KbdIcon, SelectIcon,
-  RegisterPartIcon,
+  RegisterPartIcon, TextIcon,
 } from './Icons';
 
 interface HelpModalProps {
@@ -104,6 +104,11 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
               </div>
               <p><strong>基準点切替:</strong> 移動またはコピー中に<kbd>Tab</kbd>キーを押すと、吸着の基準となる点（選択図形の頂点や交点）を順番に切り替えられます。</p>
               <p><strong>削除:</strong> 図形を選択した状態で<kbd>Delete</kbd>または<kbd>Backspace</kbd>キーを押すと削除できます。</p>
+            </HelpItem>
+
+            <HelpItem title="文字入力と図面情報（面積データ）の編集" icon={<TextIcon className="w-5 h-5" />}>
+              <p><strong>文字ツール (T):</strong> ツールバーの「文字 (T)」アイコンを選択、またはキーボードの <kbd>T</kbd> キーを押します。キャンバスをクリックすると、設定した文字（または入力ダイアログ）で文字を配置できます。フォントサイズやフォント種別（ゴシック体・明朝体・等幅・メイリオ等）、カラーを自由に指定できます。</p>
+              <p><strong>図面情報・面積データの編集:</strong> 図面右下の面積・縮尺データ（例: <code>1F:45.00㎡ 2F:45.00㎡ Total:90.00㎡ Scale:1/100</code>）は、編集可能な図面データとして配置されています。「選択」ツールでクリックすると、プロパティ画面で文字内容や縮尺、工事名、設計日などを直接編集できます。ダブルクリックでも編集ダイアログが開きます。「最新値に同期」ボタンを押すと、いつでも現在のユニット配置から計算した面積値に再同期できます。</p>
             </HelpItem>
 
             <HelpItem title="パーツの登録と配置" icon={<RegisterPartIcon className="w-6 h-6" />}>

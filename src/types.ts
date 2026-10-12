@@ -69,7 +69,7 @@ export interface PanZoom {
 }
 
 export type AppMode = 'placement' | 'drafting';
-export type DrawingTool = 'select' | 'pen' | 'pencil' | 'marker' | 'eraser' | 'bucket';
+export type DrawingTool = 'select' | 'pen' | 'text' | 'pencil' | 'marker' | 'eraser' | 'bucket';
 export type ShapeType = 'line' | 'polyline' | 'rectangle' | 'arc';
 export type LineType = 
   | 'solid'
@@ -101,6 +101,8 @@ export interface DrawingPath {
   opacity?: number; // 0.0 to 1.0 (Stroke opacity)
   text?: string; // Text for labels (e.g. 1F, 2F)
   fontSize?: number; // Font size in mm
+  fontFamily?: string; // Font family for text (e.g. sans-serif, serif, monospace)
+  isCustomText?: boolean; // Flag to indicate manually customized text
 }
 
 export type LayerVisibility = 'visible' | 'faint' | 'hidden';
@@ -181,6 +183,12 @@ export interface AppState {
     fillOpacity?: number; // 0.0 to 1.0
     opacity: number; // 0.0 to 1.0
   };
+  textSettings: {
+    text: string;
+    fontSize: number; // in mm
+    fontFamily: string;
+    color: string;
+  };
   eraserSettings: {
     strokeWidth: number;
     segmentRadius: number;
@@ -260,6 +268,7 @@ export type Action =
   | { type: 'SET_ACTIVE_TOOL'; payload: DrawingTool }
   | { type: 'SET_ACTIVE_SHAPE'; payload: ShapeType }
   | { type: 'SET_PEN_SETTINGS'; payload: { color?: string; strokeWidth?: number; lineType?: LineType; fill?: string; fillOpacity?: number; opacity?: number; } }
+  | { type: 'SET_TEXT_SETTINGS'; payload: { text?: string; fontSize?: number; fontFamily?: string; color?: string } }
   | { type: 'SET_ERASER_SETTINGS'; payload: { strokeWidth?: number; segmentRadius?: number } }
   | { type: 'SET_ACTIVE_DRAWING_LAYER'; payload: number }
   | { type: 'TOGGLE_LAYER_VISIBILITY'; payload: number }

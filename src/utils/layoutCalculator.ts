@@ -923,3 +923,51 @@ export const createFloorLabelPath = (
   };
 };
 
+export const createAreaSummaryPath = (
+  areaSummaryText: string,
+  pageWidth: number,
+  pageHeight: number,
+  borderMargin: number = 10,
+  fontSize: number = 1.8,
+  offset: { x: number; y: number } = { x: 0, y: 0 }
+): DrawingPath => {
+  const lines = areaSummaryText.split('\n');
+  let maxLineW = 0;
+  for (const line of lines) {
+    let lineW = 0;
+    for (const ch of line) {
+      lineW += ch.charCodeAt(0) > 255 ? fontSize * 1.05 : fontSize * 0.6;
+    }
+    if (lineW > maxLineW) maxLineW = lineW;
+  }
+  const totalW = Math.max(fontSize, maxLineW);
+  const totalH = Math.max(fontSize, lines.length * fontSize * 1.25);
+
+  const paddingRight = 2.0;
+  const paddingBottom = 2.0;
+  const maxX = pageWidth - borderMargin - paddingRight + offset.x;
+  const minX = maxX - totalW;
+  const maxY = pageHeight - borderMargin - paddingBottom + offset.y;
+  const minY = maxY - totalH;
+
+  return {
+    id: 'unit-area-summary',
+    points: [
+      { x: minX, y: minY },
+      { x: maxX, y: minY },
+      { x: maxX, y: maxY },
+      { x: minX, y: maxY },
+      { x: minX, y: minY }
+    ],
+    color: '#64748b',
+    strokeWidth: 0.1,
+    tool: 'pen',
+    lineType: 'solid',
+    isHandwriting: false,
+    opacity: 1.0,
+    text: areaSummaryText,
+    fontSize: fontSize,
+    fontFamily: 'sans-serif'
+  };
+};
+

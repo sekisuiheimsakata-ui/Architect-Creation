@@ -5,6 +5,7 @@ import { useAppContext } from '../state/AppContext';
 import { useDraggableWindow } from '../hooks/useDraggableWindow';
 import { getPointsBounds } from '../utils/geometry';
 import { getPathAsPoints } from '../utils/layoutCalculator';
+import { calculateArea } from '../utils/areaCalculator';
 import { DrawingPoint, DrawingPath, LineType } from '../types';
 import { 
     LockClosedIcon, LockOpenIcon, RegisterPartIcon, ChevronDownIcon, 
@@ -230,6 +231,125 @@ export const PropertyWindow: React.FC = () => {
                                 <div className="col-span-3 flex items-center border border-slate-200 rounded-sm px-1 py-0.5 bg-slate-50">
                                     <span className="font-semibold text-slate-500 mr-1">H:</span>
                                     <input type="text" value={localDimensions.h} onChange={(e) => setLocalDimensions({ ...localDimensions, h: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && handleDimensionCommit('h')} onBlur={() => handleDimensionCommit('h')} className="w-full bg-transparent text-right focus:outline-none" />
+                                </div>
+                            </div>
+                        )}
+
+                                                {/* Text Properties (When a text entity is selected) */}
+                        {firstSelectedPath?.text !== undefined && (
+                            <div className="space-y-2 border border-blue-200 bg-blue-50/40 p-2 rounded-sm">
+                                <div className="flex items-center justify-between border-b border-blue-100 pb-1">
+                                    <h3 className="font-semibold text-blue-700 flex items-center space-x-1">
+                                        <span>{firstSelectedPath.id.startsWith('unit-area-summary') ? '図面情報・面積データ' : '文字プロパティ'}</span>
+                                    </h3>
+                                    {firstSelectedPath.id.startsWith('unit-area-summary') && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const areaResult = calculateArea(state.present, state.firstFloorDeduction, state.stairDeductions);
+                                                const floorAreaStrings = areaResult.floors.map(floor => `${floor.floorNumber}F:${floor.totalArea.toFixed(2)}㎡`).join(' ');
+                                                const totalAreaString = `Total:${areaResult.totalArea.toFixed(2)}㎡`;
+                                                const scaleString = 'Scale:1/100';
+                                                const synced = `${floorAreaStrings} ${totalAreaString} ${scaleString}`;
+                                                updateSelected({ text: synced, isCustomText: false });
+                                            }}
+                                            className="text-[10px] text-blue-600 hover:text-blue-800 bg-blue-100/70 hover:bg-blue-100 px-1.5 py-0.5 rounded transition-colors font-medium cursor-pointer"
+                                            title="現在のユニット配置から最新の面積計算値に再同期"
+                                        >
+                                            🔄 最新値に同期
+                                        </button>
+                                    )}
+                                </div>
+                                <div>
+                                    <div className="flex items-center justify-between mb-0.5">
+                                        <label className="block text-[11px] text-slate-500">テキスト内容</label>
+                                        {firstSelectedPath.isCustomText && (
+                                            <span className="text-[10px] text-amber-600 font-medium">編集済み</span>
+                                        )}
+                                    </div>
+                                    <textarea
+                                        rows={2}
+                                        value={firstSelectedPath.text || ""}
+                                        onChange={(e) => updateSelected({ text: e.target.value, isCustomText: true })}
+                                        className="w-full border border-slate-300 rounded-sm px-1.5 py-1 text-xs bg-white focus:outline-none focus:border-blue-500 font-mono resize-none leading-relaxed"
+                                        placeholder="文字・データ内容を入力..."
+                                    />
+                                    {firstSelectedPath.id.startsWith('unit-area-summary') && (
+                                        <div className="flex flex-wrap gap-1 mt-1">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const cur = firstSelectedPath.text || "";
+                                                    const updated = cur.includes('Scale:') ? cur.replace(/Scale:[^\s]+/, 'Scale:1/100') : `${cur} Scale:1/100`.trim();
+                                                    updateSelected({ text: updated, isCustomText: true });
+                                                }}
+                                                className="text-[10px] bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 px-1 py-0.5 rounded"
+                                            >
+                                                1/100
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const cur = firstSelectedPath.text || "";
+                                                    const updated = cur.includes('Scale:') ? cur.replace(/Scale:[^\s]+/, 'Scale:1/50') : `${cur} Scale:1/50`.trim();
+                                                    updateSelected({ text: updated, isCustomText: true });
+                                                }}
+                                                className="text-[10px] bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 px-1 py-0.5 rounded"
+                                            >
+                                                1/50
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const cur = firstSelectedPath.text || "";
+                                                    const today = new Date().toLocaleDateString('ja-JP');
+                                                    updateSelected({ text: `${cur}\n設計日:${today}`.trim(), isCustomText: true });
+                                                }}
+                                                className="text-[10px] bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 px-1 py-0.5 rounded"
+                                            >
+                                                + 日付
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const cur = firstSelectedPath.text || "";
+                                                    updateSelected({ text: `${cur}\n工事名称:`.trim(), isCustomText: true });
+                                                }}
+                                                className="text-[10px] bg-white border border-slate-200 text-slate-600 hover:bg-slate-100 px-1 py-0.5 rounded"
+                                            >
+                                                + 工事名称
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div>
+                                        <label className="block text-[11px] text-slate-500 mb-0.5">フォントサイズ (mm)</label>
+                                        <input
+                                            type="number"
+                                            min="0.5"
+                                            max="50"
+                                            step="0.5"
+                                            value={firstSelectedPath.fontSize || 1.8}
+                                            onChange={(e) => updateSelected({ fontSize: parseFloat(e.target.value) || 1.8 })}
+                                            className="w-full border border-slate-300 rounded-sm px-1.5 py-1 text-xs bg-white text-right focus:outline-none focus:border-blue-500"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[11px] text-slate-500 mb-0.5">フォント種別</label>
+                                        <select
+                                            value={firstSelectedPath.fontFamily || "sans-serif"}
+                                            onChange={(e) => updateSelected({ fontFamily: e.target.value })}
+                                            className="w-full border border-slate-300 rounded-sm px-1 py-1 text-xs bg-white focus:outline-none focus:border-blue-500"
+                                        >
+                                            <option value="sans-serif">ゴシック体 (Sans-Serif)</option>
+                                            <option value="serif">明朝体 (Serif)</option>
+                                            <option value="monospace">等幅 (Monospace)</option>
+                                            <option value="Meiryo, sans-serif">メイリオ (Meiryo)</option>
+                                            <option value="'Yu Gothic', sans-serif">游ゴシック (Yu Gothic)</option>
+                                            <option value="'MS Gothic', monospace">MS ゴシック (MS Gothic)</option>
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
                         )}

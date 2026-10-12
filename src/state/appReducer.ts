@@ -4,7 +4,7 @@ import type { AppState, Action, PlacedUnit, DrawingPath, DrawingLayer, Deduction
 import { isPlacementValid } from '../utils/validation';
 import { DEDUCTION_OPTIONS, STAIR_DEDUCTION_OPTIONS, PAGE_DIMENSIONS, GRID_ROWS, GRID_COLS, MAX_FLOORS, MIN_SCALE, MAX_SCALE } from '../constants';
 import { transformPoints } from '../utils/geometry';
-import { calculatePdfLayoutData, getFloorOffset, createFloorLabelPath } from '../utils/layoutCalculator';
+import { calculatePdfLayoutData, getFloorOffset, createFloorLabelPath, createAreaSummaryPath } from '../utils/layoutCalculator';
 import { PaperSize, PaperOrientation } from '../components/PrintLayout';
 
 const initialGrid: (PlacedUnit | null)[][][] = Array.from({ length: MAX_FLOORS }, () =>
@@ -109,6 +109,45 @@ const createUnitLayer = (
         }
     });
 
+    // Editable Bottom-Right Area & Title Summary
+    if (layoutData.positionedFloors.length > 0) {
+        const floorAreaStrings = layoutData.areaResult.floors.map(floor => `${floor.floorNumber}F:${floor.totalArea.toFixed(2)}㎡`).join(' ');
+        const totalAreaString = `Total:${layoutData.areaResult.totalArea.toFixed(2)}㎡`;
+        const scaleString = 'Scale:1/100';
+        const defaultSummaryText = `${floorAreaStrings} ${totalAreaString} ${scaleString}`;
+
+        const existingAreaSummary = existingUnitLayer?.paths.find(p => p.id === 'unit-area-summary');
+        if (preserveOffsets && existingAreaSummary) {
+            if (existingAreaSummary.isCustomText) {
+                // Keep the customized text and position exactly as edited by the user
+                paths.push(existingAreaSummary);
+            } else {
+                // Auto-sync calculated values while preserving user-moved position and font styling
+                const minX = Math.min(...existingAreaSummary.points.map(pt => pt.x));
+                const minY = Math.min(...existingAreaSummary.points.map(pt => pt.y));
+                const fs = existingAreaSummary.fontSize || 1.8;
+                let newWidth = 0;
+                for (const ch of defaultSummaryText) {
+                    newWidth += ch.charCodeAt(0) > 255 ? fs * 1.05 : fs * 0.6;
+                }
+                const newPoints = [
+                    { x: minX, y: minY },
+                    { x: minX + newWidth, y: minY },
+                    { x: minX + newWidth, y: minY + fs },
+                    { x: minX, y: minY + fs },
+                    { x: minX, y: minY },
+                ];
+                paths.push({
+                    ...existingAreaSummary,
+                    text: defaultSummaryText,
+                    points: newPoints,
+                });
+            }
+        } else {
+            paths.push(createAreaSummaryPath(defaultSummaryText, width, height, BORDER_MARGIN));
+        }
+    }
+
     return {
         id: 1001, // Fixed ID for Unit Layer
         name: 'ユニット配置',
@@ -158,6 +197,7 @@ export const initialState: AppState = {
   activeTool: 'pen',
   activeShape: 'line',
   penSettings: { color: '#404040', strokeWidth: 0.1, lineType: 'solid', fill: undefined, opacity: 1.0, fillOpacity: 1.0 }, // Default width 0.1, no fill, opacity 1.0
+  textSettings: { text: '', fontSize: 2.5, fontFamily: 'sans-serif', color: '#1e293b' },
   eraserSettings: { strokeWidth: 5, segmentRadius: 1.5 },
   isSnapToGrid: true,
   isDraftingSettingsVisible: false,
@@ -500,6 +540,18 @@ const handleLoadState = (state: AppState, payload: any): AppState => {
             }
         });
 
+        // Ensure bottom-right area summary is present
+        if (layoutData.positionedFloors.length > 0) {
+            const hasAreaSummary = updatedPaths.some(p => p.id === 'unit-area-summary');
+            if (!hasAreaSummary) {
+                const floorAreaStrings = layoutData.areaResult.floors.map(floor => `${floor.floorNumber}F:${floor.totalArea.toFixed(2)}㎡`).join(' ');
+                const totalAreaString = `Total:${layoutData.areaResult.totalArea.toFixed(2)}㎡`;
+                const scaleString = 'Scale:1/100';
+                const defaultSummaryText = `${floorAreaStrings} ${totalAreaString} ${scaleString}`;
+                updatedPaths.push(createAreaSummaryPath(defaultSummaryText, pWidth, pHeight, BORDER_MARGIN));
+            }
+        }
+
         loadedDrawingLayers[existingUnitIndex] = {
             ...unitLayer,
             id: 1001,
@@ -758,6 +810,7 @@ export function appReducer(state: AppState, action: Action): AppState {
     case 'SET_ACTIVE_TOOL': return { ...state, activeTool: action.payload, selectedPathIds: action.payload !== 'select' ? [] : state.selectedPathIds };
     case 'SET_ACTIVE_SHAPE': return { ...state, activeShape: action.payload };
     case 'SET_PEN_SETTINGS': return { ...state, penSettings: { ...state.penSettings, ...action.payload } };
+    case 'SET_TEXT_SETTINGS': return { ...state, textSettings: { ...state.textSettings, ...action.payload } };
     case 'SET_ERASER_SETTINGS': return { ...state, eraserSettings: { ...state.eraserSettings, ...action.payload } };
     case 'SET_ACTIVE_DRAWING_LAYER': return { ...state, activeDrawingLayer: action.payload, selectedPathIds: [] };
     case 'TOGGLE_SNAP_TO_GRID': return { ...state, isSnapToGrid: !state.isSnapToGrid };
@@ -851,8 +904,34 @@ export function appReducer(state: AppState, action: Action): AppState {
             
             const pathIndex = layer.paths.findIndex(p => p.id === pathId);
             if (pathIndex !== -1) {
+                const target = layer.paths[pathIndex];
+                const updated = { ...target, ...updates };
+                if (target.text !== undefined && (updates.text !== undefined || updates.fontSize !== undefined) && !updates.points) {
+                    const newText = updates.text !== undefined ? updates.text : target.text;
+                    const newFs = updates.fontSize !== undefined ? updates.fontSize : (target.fontSize || 1.8);
+                    const lines = newText.split('\n');
+                    let maxW = 0;
+                    for (const line of lines) {
+                        let w = 0;
+                        for (const ch of line) {
+                            w += ch.charCodeAt(0) > 255 ? newFs * 1.05 : newFs * 0.6;
+                        }
+                        if (w > maxW) maxW = w;
+                    }
+                    const totalW = Math.max(newFs, maxW);
+                    const totalH = Math.max(newFs, lines.length * newFs * 1.25);
+                    const minX = Math.min(...target.points.map(pt => pt.x));
+                    const minY = Math.min(...target.points.map(pt => pt.y));
+                    updated.points = [
+                        { x: minX, y: minY },
+                        { x: minX + totalW, y: minY },
+                        { x: minX + totalW, y: minY + totalH },
+                        { x: minX, y: minY + totalH },
+                        { x: minX, y: minY },
+                    ];
+                }
                 const newPaths = [...layer.paths];
-                newPaths[pathIndex] = { ...newPaths[pathIndex], ...updates };
+                newPaths[pathIndex] = updated;
                 return { ...layer, paths: newPaths };
             }
             return layer;
@@ -955,7 +1034,35 @@ export function appReducer(state: AppState, action: Action): AppState {
         // Only update on unlocked layers
         const newLayers = state.drawingLayers.map(l => 
             !l.isLocked
-            ? { ...l, paths: l.paths.map(p => state.selectedPathIds.includes(p.id) ? { ...p, ...action.payload } : p) }
+            ? { ...l, paths: l.paths.map(p => {
+                if (!state.selectedPathIds.includes(p.id)) return p;
+                const updated = { ...p, ...action.payload };
+                if (p.text !== undefined && (action.payload.text !== undefined || action.payload.fontSize !== undefined)) {
+                    const newText = action.payload.text !== undefined ? action.payload.text : p.text;
+                    const newFs = action.payload.fontSize !== undefined ? action.payload.fontSize : (p.fontSize || 1.8);
+                    const lines = newText.split('\n');
+                    let maxW = 0;
+                    for (const line of lines) {
+                        let w = 0;
+                        for (const ch of line) {
+                            w += ch.charCodeAt(0) > 255 ? newFs * 1.05 : newFs * 0.6;
+                        }
+                        if (w > maxW) maxW = w;
+                    }
+                    const totalW = Math.max(newFs, maxW);
+                    const totalH = Math.max(newFs, lines.length * newFs * 1.25);
+                    const minX = Math.min(...p.points.map(pt => pt.x));
+                    const minY = Math.min(...p.points.map(pt => pt.y));
+                    updated.points = [
+                        { x: minX, y: minY },
+                        { x: minX + totalW, y: minY },
+                        { x: minX + totalW, y: minY + totalH },
+                        { x: minX, y: minY + totalH },
+                        { x: minX, y: minY },
+                    ];
+                }
+                return updated;
+            }) }
             : l
         );
         return { ...state, drawingLayers: newLayers, drawingLayersPast: [...state.drawingLayersPast, state.drawingLayers], drawingLayersFuture: [] };

@@ -1,4 +1,4 @@
-import { AppState, DrawingLayer, DrawingPath, DrawingPoint, LineType } from '../types';
+import { AppState, DrawingPoint, LineType } from '../types';
 import { PaperSize, PaperOrientation } from '../components/PrintLayout';
 import { PAGE_DIMENSIONS } from '../constants';
 import { generateFilename } from './filenameGenerator';
@@ -74,7 +74,6 @@ function mapLineTypeToDxf(lineType: LineType): string {
             return 'DOT';
         case 'dash-dot':
         case 'dash-dot-dot':
-        case 'bearing':
         case 'child-bearing':
             return 'CENTER';
         case 'solid':
@@ -254,21 +253,25 @@ export function generateDxfString(state: AppState, options: DxfExportOptions): s
                 if (!includeText) continue;
                 const minPtX = Math.min(...path.points.map(p => p.x));
                 const minPtY = Math.min(...path.points.map(p => p.y));
-                const fs = path.fontSize || 2.2;
-
-                const cadPos = toCadPoint({ x: minPtX, y: minPtY + fs });
+                const fs = path.fontSize || 1.8;
                 const textHeight = fs * scaleMultiplier;
+                const lines = path.text.split('\n');
 
-                addPair(0, 'TEXT');
-                addPair(8, lName);
-                addPair(62, aci);
-                addPair(10, cadPos.x.toFixed(3));
-                addPair(20, cadPos.y.toFixed(3));
-                addPair(30, 0.0);
-                addPair(40, textHeight.toFixed(3));
-                addPair(1, path.text);
-                addPair(50, 0.0); // 0 degree orientation
-                addPair(7, 'STANDARD');
+                lines.forEach((lineText, lineIdx) => {
+                    const linePosY = minPtY + fs + (lineIdx * fs * 1.25);
+                    const cadPos = toCadPoint({ x: minPtX, y: linePosY });
+
+                    addPair(0, 'TEXT');
+                    addPair(8, lName);
+                    addPair(62, aci);
+                    addPair(10, cadPos.x.toFixed(3));
+                    addPair(20, cadPos.y.toFixed(3));
+                    addPair(30, 0.0);
+                    addPair(40, textHeight.toFixed(3));
+                    addPair(1, lineText);
+                    addPair(50, 0.0); // 0 degree orientation
+                    addPair(7, 'STANDARD');
+                });
                 continue;
             }
 

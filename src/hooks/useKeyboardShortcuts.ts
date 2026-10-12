@@ -66,7 +66,7 @@ export const useKeyboardShortcuts = (
         switch (key) {
           case 'q': // Tool Cycle
             e.preventDefault();
-            const tools: DrawingTool[] = ['select', 'pencil', 'pen', 'marker', 'eraser'];
+            const tools: DrawingTool[] = ['select', 'pen', 'text', 'eraser'];
             const currentToolIndex = tools.indexOf(state.activeTool);
             const nextTool = tools[(currentToolIndex + 1) % tools.length];
             dispatch({ type: 'SET_ACTIVE_TOOL', payload: nextTool });
@@ -88,9 +88,12 @@ export const useKeyboardShortcuts = (
             let nextWidth = widths[0];
             if (currentWidth < 0.15) nextWidth = 0.7;
             else if (currentWidth < 0.8) nextWidth = 2.25;
-            else nextWidth = 0.1;
-            
             dispatch({ type: 'SET_PEN_SETTINGS', payload: { strokeWidth: nextWidth } });
+            break;
+
+          case 't': // Direct Text Tool shortcut
+            e.preventDefault();
+            dispatch({ type: 'SET_ACTIVE_TOOL', payload: 'text' });
             break;
         }
       }

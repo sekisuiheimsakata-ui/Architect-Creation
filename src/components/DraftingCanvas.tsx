@@ -1,3 +1,4 @@
+import { InputModal } from './InputModal';
 
 import React, {
   useState,
@@ -102,7 +103,9 @@ export const DraftingCanvas: React.FC = () => {
   useEffect(() => { snapIndicatorRef.current = snapIndicator; }, [snapIndicator]);
 
   // Scale Feedback State
-  const [scaleFeedback, setScaleFeedback] = useState<{ text: string; center: DrawingPoint } | null>(null);
+    const [scaleFeedback, setScaleFeedback] = useState<{ text: string; center: DrawingPoint } | null>(null);
+  const [textModalPos, setTextModalPos] = useState<DrawingPoint | null>(null);
+  const [editingTextPath, setEditingTextPath] = useState<DrawingPath | null>(null);
   const scaleSessionRef = useRef<{ initialScale: number; currentScale: number; timer: number } | null>(null);
 
   const activeLayer = drawingLayers.find(l => l.id === activeDrawingLayer);
@@ -327,6 +330,46 @@ export const DraftingCanvas: React.FC = () => {
         return;
     }
 
+    // --- Text Tool (T) ---
+    if (stateRef.current.activeTool === 'text') {
+        if (isLayerLocked) return;
+        const currentText = stateRef.current.textSettings.text?.trim();
+        if (currentText) {
+            // Place text directly using current settings
+            const fs = stateRef.current.textSettings.fontSize || 2.5;
+            const estCharWidth = fs * 0.7;
+            const estTotalWidth = Math.max(fs, currentText.length * estCharWidth);
+            const textPolygon: DrawingPoint[] = [
+                { x: pos.x, y: pos.y },
+                { x: pos.x + estTotalWidth, y: pos.y },
+                { x: pos.x + estTotalWidth, y: pos.y + fs },
+                { x: pos.x, y: pos.y + fs },
+            ];
+            dispatch({
+                type: 'ADD_DRAWING_PATH',
+                payload: {
+                    path: {
+                        id: `text-${Date.now()}`,
+                        points: textPolygon,
+                        color: stateRef.current.textSettings.color || '#1e293b',
+                        strokeWidth: 0.1,
+                        tool: 'pen',
+                        lineType: 'solid',
+                        text: currentText,
+                        fontSize: fs,
+                        fontFamily: stateRef.current.textSettings.fontFamily || 'sans-serif',
+                        isHandwriting: false,
+                        opacity: 1.0,
+                    }
+                }
+            });
+        } else {
+            // Open modal to enter text at clicked position
+            setTextModalPos(pos);
+        }
+        return;
+    }
+
     // --- Eraser & Bucket ---
     if (stateRef.current.activeTool === 'eraser') {
         if (isLayerLocked) return;
@@ -353,6 +396,11 @@ export const DraftingCanvas: React.FC = () => {
     // --- Selection Tool ---
     if (stateRef.current.activeTool === 'select') {
         const clickedPath = findPathUnderCursor(rawPos);
+        if (e.detail === 2 && clickedPath && clickedPath.text !== undefined) {
+            // Double click on text entity in select mode opens text editor modal
+            setEditingTextPath(clickedPath);
+            return;
+        }
         
         if (!clickedPath) {
             if (!e.shiftKey) dispatch({ type: 'CLEAR_SELECTION' });
@@ -1045,6 +1093,7 @@ export const DraftingCanvas: React.FC = () => {
   }
 
   return (
+    <>
     <svg
         ref={svgRef}
         width={pageWidth}
@@ -1118,6 +1167,8 @@ export const DraftingCanvas: React.FC = () => {
                     if (path.text) {
                         const bounds = getPointsBounds(finalPoints);
                         const fs = path.fontSize || 2.2;
+                        const lines = path.text.split('\n');
+                        const isFloorLabel = path.id.startsWith('unit-label-');
                         return (
                             <g key={`ghost-${id}`}>
                                 <text
@@ -1125,11 +1176,20 @@ export const DraftingCanvas: React.FC = () => {
                                     y={bounds.y + fs * 0.85}
                                     fill={HOVER_HIGHLIGHT_COLOR}
                                     fontSize={fs}
-                                    fontWeight="bold"
+                                    fontFamily={path.fontFamily || "sans-serif"}
+                                    fontWeight={isFloorLabel ? "bold" : "normal"}
                                     opacity={0.8}
                                     pointerEvents="none"
                                 >
-                                    {path.text}
+                                    {lines.map((line, idx) => (
+                                        <tspan
+                                            key={idx}
+                                            x={bounds.x}
+                                            dy={idx === 0 ? 0 : `${fs * 1.25}`}
+                                        >
+                                            {line}
+                                        </tspan>
+                                    ))}
                                 </text>
                                 <rect
                                     x={bounds.x - 0.5}
@@ -1239,6 +1299,33 @@ export const DraftingCanvas: React.FC = () => {
                 </g>
             )}
 
+            {/* Text Tool Preview Ghost */}
+            {activeTool === 'text' && effectiveDraftingPos && (
+                <g pointerEvents="none" opacity={0.75} transform={`translate(${effectiveDraftingPos.x}, ${effectiveDraftingPos.y})`}>
+                    <text
+                        x={0}
+                        y={(state.textSettings.fontSize || 2.5) * 0.85}
+                        fill={state.textSettings.color || '#1e293b'}
+                        fontSize={state.textSettings.fontSize || 2.5}
+                        fontFamily={state.textSettings.fontFamily || 'sans-serif'}
+                        fontWeight="bold"
+                    >
+                        {state.textSettings.text || 'テキスト入力'}
+                    </text>
+                    <rect
+                        x={-0.5}
+                        y={-0.5}
+                        width={Math.max((state.textSettings.fontSize || 2.5), (state.textSettings.text || 'テキスト入力').length * (state.textSettings.fontSize || 2.5) * 0.7) + 1}
+                        height={(state.textSettings.fontSize || 2.5) + 1}
+                        fill="none"
+                        stroke="#3b82f6"
+                        strokeWidth={0.3}
+                        strokeDasharray="1 1"
+                        rx={0.5}
+                    />
+                </g>
+            )}
+
             {/* Placed Part Ghost */}
             {selectedPartForPlacement && cursorPos && (
                 <g pointerEvents="none" opacity={0.7}>
@@ -1311,5 +1398,94 @@ export const DraftingCanvas: React.FC = () => {
             )}
         </g>
     </svg>
+    {/* Text Tool Input Modal */}
+    <InputModal
+        isOpen={!!textModalPos}
+        title="文字の配置"
+        placeholder="配置する文字を入力..."
+        defaultValue={state.textSettings.text}
+        onClose={() => setTextModalPos(null)}
+        onConfirm={(val) => {
+            if (textModalPos && val.trim()) {
+                const fs = state.textSettings.fontSize || 2.5;
+                const estCharWidth = fs * 0.7;
+                const estTotalWidth = Math.max(fs, val.trim().length * estCharWidth);
+                const textPolygon: DrawingPoint[] = [
+                    { x: textModalPos.x, y: textModalPos.y },
+                    { x: textModalPos.x + estTotalWidth, y: textModalPos.y },
+                    { x: textModalPos.x + estTotalWidth, y: textModalPos.y + fs },
+                    { x: textModalPos.x, y: textModalPos.y + fs },
+                ];
+                dispatch({
+                    type: 'ADD_DRAWING_PATH',
+                    payload: {
+                        path: {
+                            id: `text-${Date.now()}`,
+                            points: textPolygon,
+                            color: state.textSettings.color || '#1e293b',
+                            strokeWidth: 0.1,
+                            tool: 'pen',
+                            lineType: 'solid',
+                            text: val.trim(),
+                            fontSize: fs,
+                            fontFamily: state.textSettings.fontFamily || 'sans-serif',
+                            isHandwriting: false,
+                            opacity: 1.0,
+                        }
+                    }
+                });
+                dispatch({ type: 'SET_TEXT_SETTINGS', payload: { text: val.trim() } });
+            }
+            setTextModalPos(null);
+        }}
+        confirmText="配置"
+    />
+    {/* Text Entity Edit Modal */}
+    <InputModal
+        isOpen={!!editingTextPath}
+        title={editingTextPath?.id.startsWith('unit-area-summary') ? "図面情報・面積データの編集" : "文字の編集"}
+        defaultValue={editingTextPath?.text || ''}
+        placeholder={editingTextPath?.id.startsWith('unit-area-summary') ? "面積・縮尺・図面情報を入力..." : "文字を入力..."}
+        onClose={() => setEditingTextPath(null)}
+        onConfirm={(val) => {
+            if (editingTextPath && val.trim()) {
+                const fs = editingTextPath.fontSize || 1.8;
+                const lines = val.trim().split('\n');
+                let maxLineW = 0;
+                for (const line of lines) {
+                    let lineW = 0;
+                    for (const ch of line) {
+                        lineW += ch.charCodeAt(0) > 255 ? fs * 1.05 : fs * 0.6;
+                    }
+                    if (lineW > maxLineW) maxLineW = lineW;
+                }
+                const totalW = Math.max(fs, maxLineW);
+                const totalH = Math.max(fs, lines.length * fs * 1.25);
+                const minX = Math.min(...editingTextPath.points.map(p => p.x));
+                const minY = Math.min(...editingTextPath.points.map(p => p.y));
+                const updatedPolygon: DrawingPoint[] = [
+                    { x: minX, y: minY },
+                    { x: minX + totalW, y: minY },
+                    { x: minX + totalW, y: minY + totalH },
+                    { x: minX, y: minY + totalH },
+                    { x: minX, y: minY },
+                ];
+                dispatch({
+                    type: 'UPDATE_SPECIFIC_PATH',
+                    payload: {
+                        pathId: editingTextPath.id,
+                        updates: {
+                            text: val.trim(),
+                            points: updatedPolygon,
+                            isCustomText: true,
+                        }
+                    }
+                });
+            }
+            setEditingTextPath(null);
+        }}
+        confirmText="更新"
+    />
+    </>
   );
 };

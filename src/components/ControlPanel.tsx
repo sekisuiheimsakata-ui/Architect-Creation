@@ -124,9 +124,10 @@ const HelpTabContent: React.FC = () => (
 
         <HelpSection title="製図: 基本操作" icon={<HelpPencilIcon className="w-5 h-5"/>}>
             <HelpSubItem title="ツール">
-                <p><strong>選択:</strong> 図形の選択・移動</p>
-                <p><strong>ペン類:</strong> 自由描画（Shiftで直線）</p>
-                <p><strong>消しゴム:</strong> 線をクリックで削除。<Kbd>Space</Kbd>長押しで部分消しゴム</p>
+                <p><strong>選択:</strong> 図形の選択・移動（文字ダブルクリックで編集）</p>
+                <p><strong>文字 (T):</strong> キャンバスクリックで文字配置・フォント設定</p>
+                <p><strong>ペン類:</strong> 線・図形描画</p>
+                <p><strong>消しゴム:</strong> 線や文字をクリックで削除。<Kbd>Space</Kbd>長押しで部分消しゴム</p>
             </HelpSubItem>
             <HelpSubItem title="図形">
                 <p><strong>線・連続線:</strong> クリックで点追加、右クリック/Enterで終了</p>
@@ -206,55 +207,36 @@ export const ControlPanel: React.FC<ControlPanelProps> = memo(({ isOpen, onClose
     const [activeTab, setActiveTab] = useState<Tab>('drafting');
     const panelRef = useRef<HTMLDivElement>(null);
     
+    const handleDragEnd = React.useCallback((rect: { x: number, y: number, width: number, height: number }) => {
+        dispatch({ 
+            type: 'UPDATE_CONTROL_PANEL_RECT', 
+            payload: rect
+        });
+    }, [dispatch]);
+
     // Initial position Top-Left (x: 10, y: 10)
     const { position, size, handleMouseDown, handleResizeMouseDown, setPosition, setSize } = useDraggableWindow(
         state.controlPanelRect, // Use rect from state as initial
-        { width: state.controlPanelRect.width, height: state.controlPanelRect.height }
+        { width: state.controlPanelRect.width, height: state.controlPanelRect.height },
+        280, 200,
+        handleDragEnd
     );
 
-    // Sync local state when Redux state changes (e.g. on Load)
+    // Sync local state when Redux state changes externally (e.g. on Load)
     useEffect(() => {
         const { x, y, width, height } = state.controlPanelRect;
-        if (Math.abs(x - position.x) > 1 || Math.abs(y - position.y) > 1) {
+        if (Math.abs(x - position.x) > 2 || Math.abs(y - position.y) > 2) {
             setPosition({ x, y });
         }
-        if (Math.abs(width - size.width) > 1 || Math.abs(height - size.height) > 1) {
+        if (Math.abs(width - size.width) > 2 || Math.abs(height - size.height) > 2) {
             setSize({ width, height });
         }
-    }, [state.controlPanelRect, setPosition, setSize]);
-
-    // Track last dispatched rect to prevent redundant updates and loops
-    const lastRectRef = useRef<ControlPanelRect | null>(null);
+    }, [state.controlPanelRect.x, state.controlPanelRect.y, state.controlPanelRect.width, state.controlPanelRect.height, setPosition, setSize]);
 
     useEffect(() => {
         if (mode === 'placement' && activeTab !== 'placement') setActiveTab('placement');
         if (mode === 'drafting' && activeTab !== 'drafting') setActiveTab('drafting');
-    }, [mode]);
-
-    // Sync control panel rect with global state for workspace layout adjustments
-    useEffect(() => {
-        const newRect = { 
-            x: position.x, 
-            y: position.y, 
-            width: size.width, 
-            height: isOpen ? size.height : 40 
-        };
-
-        // Deep comparison for simple numbers to avoid redundant dispatch loop
-        if (lastRectRef.current && 
-            lastRectRef.current.x === newRect.x && 
-            lastRectRef.current.y === newRect.y && 
-            lastRectRef.current.width === newRect.width && 
-            lastRectRef.current.height === newRect.height) {
-            return;
-        }
-
-        lastRectRef.current = newRect;
-        dispatch({ 
-            type: 'UPDATE_CONTROL_PANEL_RECT', 
-            payload: newRect
-        });
-    }, [position, size, isOpen, dispatch]);
+    }, [mode, activeTab]);
 
     const handleTabChange = (tab: Tab) => {
         setActiveTab(tab);

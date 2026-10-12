@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { DrawingLayer } from '../types';
 import { PaperSize, PaperOrientation } from './PrintLayout';
 import { DxfExportOptions } from '../utils/dxfExport';
-import { CloseIcon, LayerIcon, FilePlusIcon } from './Icons';
+import { CloseIcon } from './Icons';
 
 interface DxfOptionsModalProps {
     isOpen: boolean;

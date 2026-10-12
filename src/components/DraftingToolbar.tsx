@@ -3,7 +3,7 @@ import React, { useState, useRef, useMemo, memo } from 'react';
 import { useAppContext } from '../state/AppContext';
 import { DrawingLayer, LineType } from '../types';
 import {
-    EyeOpenIcon, EyeClosedIcon, PenIcon, PencilIcon, EraserIcon, BucketIcon,
+    EyeOpenIcon, EyeClosedIcon, PenIcon, TextIcon, EraserIcon, BucketIcon,
     SnapPointIcon, RectangleIcon, ArcIcon, SnapLineIcon,
     LineIcon, PolylineIcon, ChevronDownIcon, PlusIcon, TrashIcon, DragHandleIcon,
     GridDotsIcon, GridLinesIcon, CopyIcon, SelectIcon,
@@ -201,7 +201,7 @@ const getLineTypeDashArray = (type: LineType) => {
 
 export const DraftingToolbar: React.FC = () => {
   const { state, dispatch } = useAppContext();
-  const { drawingLayers, activeDrawingLayer, activeTool, activeShape, penSettings, eraserSettings, isSnapToGrid, isSnapToPoints, isSnapToLines, isHandwritingMode, showBaseGrid, showModuleGrid } = state;
+  const { drawingLayers, activeDrawingLayer, activeTool, activeShape, penSettings, textSettings, eraserSettings, isSnapToGrid, isSnapToPoints, isSnapToLines, isHandwritingMode, showBaseGrid, showModuleGrid } = state;
 
   const dragItem = useRef<number | null>(null);
   const dragOverItem = useRef<number | null>(null);
@@ -280,7 +280,7 @@ export const DraftingToolbar: React.FC = () => {
   };
 
   const colors = ['#1e293b', '#404040', '#808080', '#c0c0c0', '#ef4444', '#3b82f6'];
-  const isDrawingToolActive = ['pen', 'pencil', 'bucket'].includes(activeTool);
+  const isDrawingToolActive = ['pen', 'bucket'].includes(activeTool);
 
   return (
     <div className="flex flex-col space-y-1">
@@ -293,8 +293,8 @@ export const DraftingToolbar: React.FC = () => {
                     <HeaderIconButton title="選択" isActive={activeTool === 'select'} onClick={() => dispatch({type: 'SET_ACTIVE_TOOL', payload: 'select'})}>
                         <SelectIcon className="w-4 h-4" />
                     </HeaderIconButton>
-                    <HeaderIconButton title="フリーハンド (鉛筆)" isActive={activeTool === 'pencil'} onClick={() => dispatch({type: 'SET_ACTIVE_TOOL', payload: 'pencil'})}>
-                        <PencilIcon className="w-4 h-4" />
+                    <HeaderIconButton title="文字 (T)" isActive={activeTool === 'text'} onClick={() => dispatch({type: 'SET_ACTIVE_TOOL', payload: 'text'})}>
+                        <TextIcon className="w-4 h-4" />
                     </HeaderIconButton>
                     <HeaderIconButton title="ペン" isActive={activeTool === 'pen'} onClick={() => dispatch({type: 'SET_ACTIVE_TOOL', payload: 'pen'})}>
                         <PenIcon className="w-4 h-4" />
@@ -491,6 +491,83 @@ export const DraftingToolbar: React.FC = () => {
             </div>
         </ToolbarSection>
       
+        {/* Text Settings Section */}
+        {activeTool === 'text' && (
+            <ToolbarSection title="文字設定" collapsible={false}>
+                <div className="space-y-2 p-1">
+                    <div>
+                        <label className="text-[11px] text-slate-500 block mb-0.5">入力テキスト (キャンバスクリックで配置)</label>
+                        <input
+                            type="text"
+                            value={textSettings.text}
+                            onChange={(e) => dispatch({ type: 'SET_TEXT_SETTINGS', payload: { text: e.target.value } })}
+                            placeholder="文字を入力..."
+                            className="w-full px-2 py-1 text-xs border border-slate-300 rounded-sm bg-white focus:outline-none focus:border-blue-500"
+                        />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                        <div>
+                            <label className="text-[11px] text-slate-500 block mb-0.5">サイズ (mm)</label>
+                            <div className="flex items-center space-x-1">
+                                <select
+                                    value={[1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 7.0, 10.0].includes(textSettings.fontSize) ? textSettings.fontSize : 'custom'}
+                                    onChange={(e) => {
+                                        if (e.target.value !== 'custom') {
+                                            dispatch({ type: 'SET_TEXT_SETTINGS', payload: { fontSize: parseFloat(e.target.value) } });
+                                        }
+                                    }}
+                                    className="w-full text-xs border border-slate-300 rounded-sm p-1 bg-white focus:outline-none focus:border-blue-500"
+                                >
+                                    {[1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 7.0, 10.0].map(s => (
+                                        <option key={s} value={s}>{s} mm</option>
+                                    ))}
+                                    <option value="custom">カスタム</option>
+                                </select>
+                                <input
+                                    type="number"
+                                    min="0.5"
+                                    max="50"
+                                    step="0.5"
+                                    value={textSettings.fontSize}
+                                    onChange={(e) => dispatch({ type: 'SET_TEXT_SETTINGS', payload: { fontSize: parseFloat(e.target.value) || 2.5 } })}
+                                    className="w-14 text-xs border border-slate-300 rounded-sm p-1 bg-white text-right focus:outline-none focus:border-blue-500"
+                                    title="フォントサイズ (mm)"
+                                />
+                            </div>
+                        </div>
+                        <div>
+                            <label className="text-[11px] text-slate-500 block mb-0.5">フォント選択</label>
+                            <select
+                                value={textSettings.fontFamily}
+                                onChange={(e) => dispatch({ type: 'SET_TEXT_SETTINGS', payload: { fontFamily: e.target.value } })}
+                                className="w-full text-xs border border-slate-300 rounded-sm p-1 bg-white focus:outline-none focus:border-blue-500"
+                            >
+                                <option value="sans-serif">ゴシック体 (Sans-Serif)</option>
+                                <option value="serif">明朝体 (Serif)</option>
+                                <option value="monospace">等幅 (Monospace)</option>
+                                <option value="Meiryo, sans-serif">メイリオ (Meiryo)</option>
+                                <option value="'Yu Gothic', sans-serif">游ゴシック (Yu Gothic)</option>
+                                <option value="'MS Gothic', monospace">MS ゴシック (MS Gothic)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div>
+                        <label className="text-[11px] text-slate-500 block mb-0.5">文字カラー</label>
+                        <div className="flex space-x-1">
+                            {colors.map(color => (
+                                <button
+                                    key={color}
+                                    onClick={() => dispatch({ type: 'SET_TEXT_SETTINGS', payload: { color } })}
+                                    className={`w-5 h-6 rounded-sm border transition-all ${textSettings.color === color ? 'border-blue-500 ring-1 ring-blue-500 scale-110 z-10' : 'border-transparent hover:border-slate-300'}`}
+                                    style={{ backgroundColor: color }}
+                                    title={color}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </ToolbarSection>
+        )}
         {/* Eraser Section */}
         {activeTool === 'eraser' && (
             <ToolbarSection title="消しゴム設定" collapsible={false}>

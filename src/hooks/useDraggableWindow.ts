@@ -5,10 +5,18 @@ export const useDraggableWindow = (
     initialPosition: { x: number, y: number },
     initialSize: { width: number, height: number },
     minWidth: number = 200,
-    minHeight: number = 100
+    minHeight: number = 100,
+    onDragEnd?: (rect: { x: number, y: number, width: number, height: number }) => void
 ) => {
     const [position, setPosition] = useState(initialPosition);
     const [size, setSize] = useState(initialSize);
+    const positionRef = useRef(initialPosition);
+    positionRef.current = position;
+    const sizeRef = useRef(initialSize);
+    sizeRef.current = size;
+    const onDragEndRef = useRef(onDragEnd);
+    onDragEndRef.current = onDragEnd;
+
     const dragRef = useRef<{ isDragging: boolean; startX: number; startY: number }>({ isDragging: false, startX: 0, startY: 0 });
     const resizeRef = useRef<{ isResizing: boolean; startX: number; startY: number; startWidth: number; startHeight: number; direction: 'xy' | 'y' }>({ 
         isResizing: false, startX: 0, startY: 0, startWidth: 0, startHeight: 0, direction: 'xy' 
@@ -68,8 +76,17 @@ export const useDraggableWindow = (
         };
 
         const handleMouseUp = () => {
+            const wasActive = dragRef.current.isDragging || resizeRef.current.isResizing;
             dragRef.current.isDragging = false;
             resizeRef.current.isResizing = false;
+            if (wasActive && onDragEndRef.current) {
+                onDragEndRef.current({
+                    x: positionRef.current.x,
+                    y: positionRef.current.y,
+                    width: sizeRef.current.width,
+                    height: sizeRef.current.height
+                });
+            }
         };
 
         window.addEventListener('mousemove', handleMouseMove);

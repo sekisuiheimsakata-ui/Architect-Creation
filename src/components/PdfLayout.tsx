@@ -185,7 +185,8 @@ const PdfLayoutContent: React.FC<PdfLayoutProps> = ({ state, onReady, pageWidth,
             </g>
         )}
 
-        {positionedFloors.length > 0 && isUnitTextVisible && (
+        {/* Only render fallback static summary if no editable unit-area-summary path exists */}
+        {positionedFloors.length > 0 && isUnitTextVisible && !state.drawingLayers.some(l => l.paths.some(p => p.id === 'unit-area-summary')) && (
           <g opacity={unitTextOpacity}>
             <text
               x={pageWidth - BORDER_MARGIN - 2}
@@ -210,6 +211,9 @@ const PdfLayoutContent: React.FC<PdfLayoutProps> = ({ state, onReady, pageWidth,
                           const minX = Math.min(...path.points.map(p => p.x));
                           const minY = Math.min(...path.points.map(p => p.y));
                           const fs = path.fontSize || 2.2;
+                          const fontFam = path.fontFamily || 'sans-serif';
+                          const lines = path.text.split('\n');
+                          const isFloorLabel = path.id.startsWith('unit-label-');
                           return (
                               <text
                                   key={path.id}
@@ -217,11 +221,20 @@ const PdfLayoutContent: React.FC<PdfLayoutProps> = ({ state, onReady, pageWidth,
                                   y={minY + fs * 0.85}
                                   fill={path.color || '#1e293b'}
                                   fontSize={fs}
-                                  fontWeight="bold"
+                                  fontFamily={fontFam}
+                                  fontWeight={isFloorLabel ? "bold" : "normal"}
                                   textAnchor="start"
                                   style={{ userSelect: 'none' }}
                               >
-                                  {path.text}
+                                  {lines.map((line, idx) => (
+                                      <tspan
+                                          key={idx}
+                                          x={minX}
+                                          dy={idx === 0 ? 0 : `${fs * 1.25}`}
+                                      >
+                                          {line}
+                                      </tspan>
+                                  ))}
                               </text>
                           );
                       }
