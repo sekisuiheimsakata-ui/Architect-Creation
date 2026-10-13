@@ -1,6 +1,6 @@
 
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useAppContext } from '../state/AppContext';
 import { useDraggableWindow } from '../hooks/useDraggableWindow';
 import { getPointsBounds } from '../utils/geometry';
@@ -32,45 +32,32 @@ export const PropertyWindow: React.FC = () => {
     const { selectedPathIds, drawingLayers, clipboard, propertyWindowRect } = state;
     const [isCollapsed, setIsCollapsed] = useState(false);
     
-    // Initialize draggable with state from Redux (computed in reducer for initial snap)
-    // If propertyWindowRect is null, fall back to default, though Redux logic should set it on selection.
+    // Initialize draggable with state from Redux
     const defaultRect = { x: 340, y: 120, width: 240, height: 400 };
     const initialRect = propertyWindowRect || defaultRect;
+
+    const handleDragEnd = React.useCallback((rect: { x: number, y: number, width: number, height: number }) => {
+        dispatch({ type: 'UPDATE_PROPERTY_WINDOW_RECT', payload: rect });
+    }, [dispatch]);
 
     const { position, size, handleMouseDown, handleResizeMouseDown, setPosition, setSize } = useDraggableWindow(
         { x: initialRect.x, y: initialRect.y }, 
         { width: initialRect.width, height: initialRect.height },
-        220, 200 // minWidth, minHeight
+        220, 200, // minWidth, minHeight
+        handleDragEnd
     );
 
-    // Sync local state when Redux state changes (e.g. on Load, or snap logic update)
+    // Sync local state ONLY when Redux propertyWindowRect significantly differs
     useEffect(() => {
         if (propertyWindowRect) {
-            if (Math.abs(propertyWindowRect.x - position.x) > 1 || Math.abs(propertyWindowRect.y - position.y) > 1) {
+            if (Math.abs(propertyWindowRect.x - position.x) > 2 || Math.abs(propertyWindowRect.y - position.y) > 2) {
                 setPosition({ x: propertyWindowRect.x, y: propertyWindowRect.y });
             }
-            if (Math.abs(propertyWindowRect.width - size.width) > 1 || Math.abs(propertyWindowRect.height - size.height) > 1) {
+            if (Math.abs(propertyWindowRect.width - size.width) > 2 || Math.abs(propertyWindowRect.height - size.height) > 2) {
                 setSize({ width: propertyWindowRect.width, height: propertyWindowRect.height });
             }
         }
-    }, [propertyWindowRect, setPosition, setSize]);
-
-    // Update Redux state when window is moved/resized locally
-    // Use a ref to debounce or avoid loop if needed, but simple effect works if we check equality
-    const lastDispatchedRect = useRef(initialRect);
-    useEffect(() => {
-        if (
-            Math.abs(lastDispatchedRect.current.x - position.x) > 1 ||
-            Math.abs(lastDispatchedRect.current.y - position.y) > 1 ||
-            Math.abs(lastDispatchedRect.current.width - size.width) > 1 ||
-            Math.abs(lastDispatchedRect.current.height - size.height) > 1
-        ) {
-            const newRect = { x: position.x, y: position.y, width: size.width, height: size.height };
-            lastDispatchedRect.current = newRect;
-            dispatch({ type: 'UPDATE_PROPERTY_WINDOW_RECT', payload: newRect });
-        }
-    }, [position, size, dispatch]);
-
+    }, [propertyWindowRect?.x, propertyWindowRect?.y, propertyWindowRect?.width, propertyWindowRect?.height, setPosition, setSize]);
     // Selection Dimensions State
     const [isAspectRatioLocked, setIsAspectRatioLocked] = useState(true);
     const [localDimensions, setLocalDimensions] = useState<{ w: string, h: string } | null>(null);

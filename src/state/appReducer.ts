@@ -4,7 +4,7 @@ import type { AppState, Action, PlacedUnit, DrawingPath, DrawingLayer, Deduction
 import { isPlacementValid } from '../utils/validation';
 import { DEDUCTION_OPTIONS, STAIR_DEDUCTION_OPTIONS, PAGE_DIMENSIONS, GRID_ROWS, GRID_COLS, MAX_FLOORS, MIN_SCALE, MAX_SCALE } from '../constants';
 import { transformPoints } from '../utils/geometry';
-import { calculatePdfLayoutData, getFloorOffset, createFloorLabelPath, createAreaSummaryPath } from '../utils/layoutCalculator';
+import { calculatePdfLayoutData, getFloorOffset, getFloorTransform, createFloorLabelPath, createAreaSummaryPath } from '../utils/layoutCalculator';
 import { PaperSize, PaperOrientation } from '../components/PrintLayout';
 
 const initialGrid: (PlacedUnit | null)[][][] = Array.from({ length: MAX_FLOORS }, () =>
@@ -50,7 +50,7 @@ const createUnitLayer = (
     size: PaperSize, 
     orientation: PaperOrientation,
     existingLayers?: DrawingLayer[],
-    preserveOffsets: boolean = false
+    preserveOffsets: boolean = true
 ): DrawingLayer => {
     const { width, height } = PAGE_DIMENSIONS[size][orientation];
     const layoutData = calculatePdfLayoutData(present, firstFloorDeduction, stairDeductions, width, height);
@@ -62,38 +62,42 @@ const createUnitLayer = (
     const existingUnitLayer = existingLayers?.find(l => l.id === 1001 || l.name === 'ユニット配置');
 
     layoutData.positionedFloors.forEach(floor => {
-        const floorOffset = preserveOffsets ? getFloorOffset(existingLayers, floor, BORDER_MARGIN) : { x: 0, y: 0 };
-        const tx = BORDER_MARGIN + floor.tx + floorOffset.x;
-        const ty = BORDER_MARGIN + floor.ty + floorOffset.y;
+        const floorTransform = preserveOffsets ? getFloorTransform(existingLayers, floor, BORDER_MARGIN) : {
+            transformPoint: (p: any) => p,
+            rotation: 0,
+            offset: { x: 0, y: 0 }
+        };
+        const floorOffset = floorTransform.offset;
+        const origBaseX = BORDER_MARGIN + floor.tx;
+        const origBaseY = BORDER_MARGIN + floor.ty;
 
         // Walls
         const addWallPaths = (polygons: any[], isOuter: boolean) => {
             polygons.forEach((poly: any, i: number) => {
                 paths.push({
-                    id: `unit-wall-${floor.floorNumber}-${isOuter ? 'out' : 'in'}-${i}-${Date.now()}`,
-                    points: poly.map((p: any) => ({ x: p.x + tx, y: p.y + ty })),
-                    color: '#1e293b',
+                    id: `unit-wall-${floor.floorNumber}-${isOuter ? "out" : "in"}-${i}-${Date.now()}`,
+                    points: poly.map((p: any) => floorTransform.transformPoint({ x: p.x + origBaseX, y: p.y + origBaseY })),
+                    color: "#1e293b",
                     strokeWidth: LINE_WIDTH,
-                    tool: 'pen',
-                    lineType: 'solid',
+                    tool: "pen",
+                    lineType: "solid",
                     isHandwriting: false,
                     opacity: 1.0
                 });
             });
         };
-
         addWallPaths(floor.innerWallPolygons, false);
         addWallPaths(floor.outerWallPolygons, true);
 
         // Pillars
-        floor.pillarPolygons.forEach((poly, i) => {
-             paths.push({
+        floor.pillarPolygons.forEach((poly, i) => { 
+            paths.push({
                 id: `unit-pillar-${floor.floorNumber}-${i}-${Date.now()}`,
-                points: poly.map((p: any) => ({ x: p.x + tx, y: p.y + ty })),
-                color: '#1e293b',
+                points: poly.map((p: any) => floorTransform.transformPoint({ x: p.x + origBaseX, y: p.y + origBaseY })),
+                color: "#1e293b",
                 strokeWidth: LINE_WIDTH,
-                tool: 'pen',
-                lineType: 'solid',
+                tool: "pen",
+                lineType: "solid",
                 isHandwriting: false,
                 opacity: 1.0
             });
@@ -230,7 +234,7 @@ const updateSystemLayers = (
     stairDeductions: AppState['stairDeductions'],
     size: PaperSize, 
     orientation: PaperOrientation,
-    preserveOffsets: boolean = false
+    preserveOffsets: boolean = true
 ): DrawingLayer[] => {
     const unitLayerContent = createUnitLayer(present, firstFloorDeduction, stairDeductions, size, orientation, layers, preserveOffsets);
     const frameLayerContent = createFrameLayer(size, orientation);
@@ -679,7 +683,7 @@ export function appReducer(state: AppState, action: Action): AppState {
         const emptyGrid = Array.from({ length: MAX_FLOORS }, () => Array.from({ length: GRID_ROWS }, () => Array(GRID_COLS).fill(null)));
         const newLayers = updateSystemLayers(
             state.drawingLayers, emptyGrid, state.firstFloorDeduction, state.stairDeductions,
-            state.draftingSettings.size, state.draftingSettings.orientation
+            state.draftingSettings.size, state.draftingSettings.orientation, false
         );
         return { ...state, past: [...past, present], present: emptyGrid, future: [], drawingLayers: newLayers };
     }

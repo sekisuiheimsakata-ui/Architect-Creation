@@ -1,7 +1,6 @@
 
 
 import React, { useState, useRef, useEffect, memo } from 'react';
-import type { ControlPanelRect } from '../types';
 import { UnitSelector } from './UnitSelector';
 import { AreaCalculator } from './AreaCalculator';
 import { useAppContext } from '../state/AppContext';
