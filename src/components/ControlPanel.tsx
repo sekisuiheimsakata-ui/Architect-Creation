@@ -233,9 +233,9 @@ export const ControlPanel: React.FC<ControlPanelProps> = memo(({ isOpen, onClose
     }, [state.controlPanelRect.x, state.controlPanelRect.y, state.controlPanelRect.width, state.controlPanelRect.height, setPosition, setSize]);
 
     useEffect(() => {
-        if (mode === 'placement' && activeTab !== 'placement') setActiveTab('placement');
-        if (mode === 'drafting' && activeTab !== 'drafting') setActiveTab('drafting');
-    }, [mode, activeTab]);
+        if (mode === 'placement') setActiveTab('placement');
+        else if (mode === 'drafting' && activeTab === 'placement') setActiveTab('drafting');
+    }, [mode]);
 
     const handleTabChange = (tab: Tab) => {
         setActiveTab(tab);
