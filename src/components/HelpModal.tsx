@@ -97,12 +97,14 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
               <p><strong>自由移動:</strong> 移動やコピーの操作中に<kbd>Shift</kbd>キーを長押しすると、一時的にすべての吸着（スナップ）が無効になり、自由に配置できます。</p>
               <div><strong>変形操作 (選択・移動中共通):</strong>
                   <ul className="list-disc list-inside pl-2 space-y-1 text-sm bg-slate-50 p-2 rounded border border-slate-200 mt-1">
-                      <li><strong>回転:</strong> <kbd>R</kbd> (90度), <kbd>Shift</kbd>+<kbd>R</kbd> (-90度)</li>
+                      <li><strong>回転:</strong> <kbd>R</kbd> (90度回転), <kbd>Shift</kbd>+<kbd>R</kbd> (15度刻み回転)</li>
+                      <li><strong>角度拾い (アライメント):</strong> <kbd>A</kbd>キーを押しながら図面上の線をクリックすると、その線の角度を拾って平行回転します</li>
                       <li><strong>反転:</strong> <kbd>H</kbd> (水平/左右), <kbd>V</kbd> (垂直/上下)</li>
                       <li><strong>拡大/縮小:</strong> <kbd>B</kbd> (拡大), <kbd>G</kbd> (縮小)</li>
                   </ul>
               </div>
               <p><strong>基準点切替:</strong> 移動またはコピー中に<kbd>Tab</kbd>キーを押すと、吸着の基準となる点（選択図形の頂点や交点）を順番に切り替えられます。</p>
+              <p><strong>矢印キー移動:</strong> 図形を選択した状態でキーボードの矢印キー（↑↓←→）を押すと、図形を微動移動できます。<kbd>Shift</kbd>併用で大きく（約450mm = 半モジュール）、<kbd>Ctrl</kbd>（Mac: <kbd>Cmd</kbd>、または<kbd>Alt</kbd>）併用で細かく（約10mm）調整できます。</p>
               <p><strong>削除:</strong> 図形を選択した状態で<kbd>Delete</kbd>または<kbd>Backspace</kbd>キーを押すと削除できます。</p>
             </HelpItem>
 
@@ -129,7 +131,8 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
               </div>
               <div className="mt-2"><strong>配置中の操作 (ショートカット):</strong>
                   <ul className="list-disc list-inside pl-2 space-y-1 text-sm bg-slate-50 p-2 rounded border border-slate-200">
-                      <li><strong>回転:</strong> <kbd>R</kbd> (90度), <kbd>Shift</kbd>+<kbd>R</kbd> (-90度)</li>
+                      <li><strong>回転:</strong> <kbd>R</kbd> (90度回転), <kbd>Shift</kbd>+<kbd>R</kbd> (15度刻み回転)</li>
+                      <li><strong>角度拾い (アライメント):</strong> <kbd>A</kbd>キーを押しながら図面上の線をクリックすると、その線の角度を拾って平行回転します</li>
                       <li><strong>反転:</strong> <kbd>H</kbd> (水平/左右), <kbd>V</kbd> (垂直/上下)</li>
                       <li><strong>拡大/縮小:</strong> <kbd>B</kbd> (拡大), <kbd>G</kbd> (縮小)</li>
                   </ul>
@@ -143,7 +146,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
               <p><strong>ツール切替:</strong> <kbd>Q</kbd>でツール、<kbd>A</kbd>で図形、<kbd>Z</kbd>で線の太さを順番に切り替えられます。</p>
               <p><strong>消しゴム:</strong> 線をクリックで全体を削除。<kbd>Space</kbd>キー長押しで部分消しモードになり、クリック＆ドラッグで赤い円が触れた部分の線が削除されます。</p>
               <p><strong>角度スナップ:</strong> 直線、連続線、矩形の描画中に<kbd>Shift</kbd>長押しで、角度を15度単位で固定します。</p>
-              <p><strong>吸着と微調整:</strong> グリッドや既存の線・頂点に吸着します。<kbd>Shift</kbd>キーを離した状態で通常の吸着が働き、長押しすると一時的にすべての吸着（スナップ）が無効になります。同時に角度スナップ（15度単位）が有効になります。また、<kbd>I</kbd>(上) <kbd>M</kbd>(下) <kbd>J</kbd>(左) <kbd>K</kbd>(右) キーで吸着位置から点を微動させることができます。</p>
+              <p><strong>吸着と角度スナップ:</strong> グリッドや既存の線・頂点に自動で吸着（スナップ）します。描画中に<kbd>Shift</kbd>キーを押している間は15度単位の角度スナップが有効になり、正確な水平・垂直・斜め線を作図できます。</p>
             </HelpItem>
             
             <HelpItem title="レイヤー操作" icon={<LayerIcon />}>

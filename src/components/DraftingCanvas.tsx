@@ -906,6 +906,25 @@ export const DraftingCanvas: React.FC = () => {
               return;
           }
 
+          // Arrow keys nudge moving for selected paths
+          if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && !drawingStateRef.current.isActive && stateRef.current.selectedPathIds.length > 0) {
+              e.preventDefault();
+              e.stopPropagation();
+              // Standard step: 1.0 (approx 100mm), Shift for large: 4.5 (approx 450mm = 1 module/half), Ctrl/Cmd or Alt for fine: 0.1 (approx 10mm)
+              const isFine = isModifier || e.altKey;
+              const step = isFine ? 0.1 : (e.shiftKey ? 4.5 : 1.0);
+              let dx = 0, dy = 0;
+              if (e.key === 'ArrowUp') dy = -step;
+              if (e.key === 'ArrowDown') dy = step;
+              if (e.key === 'ArrowLeft') dx = -step;
+              if (e.key === 'ArrowRight') dx = step;
+              dispatch({
+                  type: 'TRANSFORM_PATHS',
+                  payload: { dx, dy, isCopy: false }
+              });
+              return;
+          }
+
           if (e.key === 'a' || e.key === 'A') {
               isAKeyDownRef.current = true;
               if (stateRef.current.selectedPathIds.length > 0 || stateRef.current.selectedPartForPlacement) {

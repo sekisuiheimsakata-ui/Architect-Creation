@@ -138,7 +138,7 @@ const HelpTabContent: React.FC = () => (
             <p>選択ツールで図形をクリックして選択します。<Kbd>Shift</Kbd>+クリックで複数選択。</p>
             <HelpSubItem title="移動・コピー">
                 <p>ドラッグで移動。<Kbd>Alt</Kbd>+ドラッグでコピー。</p>
-                <p>矢印キーで移動。<Kbd>Shift</Kbd>で大きく、<Kbd>Alt</Kbd>で微細移動。</p>
+                <p>矢印キーで移動。<Kbd>Shift</Kbd>で大きく、<Kbd>Ctrl</Kbd>(または<Kbd>Alt</Kbd>)で微細移動。</p>
                 <p>移動中に<Kbd>Tab</Kbd>で基準点（スナップ点）を切り替え可能。</p>
             </HelpSubItem>
             <HelpSubItem title="変形ショートカット (移動/配置中)">
@@ -174,16 +174,22 @@ const HelpTabContent: React.FC = () => (
         <HelpSection title="ショートカット一覧" icon={<KbdIcon className="w-5 h-5"/>}>
             <div className="grid grid-cols-2 gap-2 text-[10px]">
                 <div><Kbd>Q</Kbd> ツール切替</div>
-                <div><Kbd>A</Kbd> 図形切替</div>
+                <div><Kbd>A</Kbd> 図形切替 / 角度拾い</div>
+                <div><Kbd>T</Kbd> 文字ツール</div>
                 <div><Kbd>Z</Kbd> ペン太さ切替</div>
-                <div><Kbd>Del</Kbd> 削除</div>
+                <div><Kbd>Del</Kbd> / <Kbd>BS</Kbd> 削除</div>
                 <div><Kbd>Ctrl</Kbd>+<Kbd>Z</Kbd> 戻る</div>
                 <div><Kbd>Ctrl</Kbd>+<Kbd>Y</Kbd> 進む</div>
-                <div className="col-span-2 mt-1 font-bold">変形・移動</div>
-                <div><Kbd>R</Kbd> 回転</div>
-                <div><Kbd>H</Kbd>/<Kbd>V</Kbd> 反転</div>
-                <div><Kbd>B</Kbd>/<Kbd>G</Kbd> 拡大/縮小</div>
+                <div><Kbd>Ctrl</Kbd>+<Kbd>C</Kbd> / <Kbd>X</Kbd> / <Kbd>V</Kbd> コピペ</div>
+                <div className="col-span-2 mt-1 font-bold border-t border-slate-200 pt-1">選択・変形・移動</div>
+                <div><Kbd>A</Kbd> + クリック 角度拾い</div>
+                <div><Kbd>R</Kbd> (90°) / <Kbd>Shift</Kbd>+<Kbd>R</Kbd> (15°)</div>
+                <div><Kbd>矢印キー</Kbd> 微動移動</div>
+                <div><Kbd>Alt</Kbd>+ドラッグ コピー移動</div>
+                <div><Kbd>H</Kbd> / <Kbd>V</Kbd> 左右/上下反転</div>
+                <div><Kbd>B</Kbd> / <Kbd>G</Kbd> 拡大 / 縮小</div>
                 <div><Kbd>Tab</Kbd> 基準点切替</div>
+                <div><Kbd>Esc</Kbd> 選択・配置解除</div>
             </div>
         </HelpSection>
     </div>
