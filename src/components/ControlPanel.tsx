@@ -142,7 +142,8 @@ const HelpTabContent: React.FC = () => (
                 <p>移動中に<Kbd>Tab</Kbd>で基準点（スナップ点）を切り替え可能。</p>
             </HelpSubItem>
             <HelpSubItem title="変形ショートカット (移動/配置中)">
-                <p><Kbd>R</Kbd> : 90度回転 (Shift+Rで逆)</p>
+                <p><Kbd>A</Kbd> + 線クリック : 既存線の角度を拾って平行回転（アライメント）</p>
+                <p><Kbd>R</Kbd> : 90度回転、<Kbd>Shift</Kbd>+<Kbd>R</Kbd> : 15度刻み回転</p>
                 <p><Kbd>H</Kbd> : 左右反転、<Kbd>V</Kbd> : 上下反転</p>
                 <p><Kbd>B</Kbd> : 拡大、<Kbd>G</Kbd> : 縮小</p>
             </HelpSubItem>

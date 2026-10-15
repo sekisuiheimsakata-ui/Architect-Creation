@@ -1285,6 +1285,35 @@ export function appReducer(state: AppState, action: Action): AppState {
         return { ...state, registeredParts: state.registeredParts.map(p => p.sourcePath.startsWith(sourcePath) ? { ...p, sourcePath: newBasePath + p.sourcePath.substring(sourcePath.length) } : p) };
     }
     case 'ROTATE_PART': return { ...state, partPlacementTransform: { ...state.partPlacementTransform, rotation: (state.partPlacementTransform.rotation + action.payload) % 360 } };
+    case 'SET_PART_ROTATION': return { ...state, partPlacementTransform: { ...state.partPlacementTransform, rotation: ((action.payload % 360) + 360) % 360 } };
+    case 'APPLY_ROTATION_DELTA': {
+        const { delta, centerPoint } = action.payload;
+        if (state.selectedPathIds.length === 0 || delta === 0) return state;
+        const selectionSet = new Set(state.selectedPathIds);
+        const rotTransform = { rotation: delta, scale: 1, flipX: false, flipY: false };
+        const newLayers = state.drawingLayers.map(layer => {
+            if (layer.isLocked) return layer;
+            const hasTarget = layer.paths.some(p => selectionSet.has(p.id));
+            if (!hasTarget) return layer;
+            return {
+                ...layer,
+                paths: layer.paths.map(path => {
+                    if (!selectionSet.has(path.id)) return path;
+                    const newPoints = path.points.map(p => {
+                        const trans = transformPoints([{ x: p.x - centerPoint.x, y: p.y - centerPoint.y }], rotTransform)[0];
+                        return { ...p, x: trans.x + centerPoint.x, y: trans.y + centerPoint.y };
+                    });
+                    return { ...path, points: newPoints };
+                })
+            };
+        });
+        return {
+            ...state,
+            drawingLayers: newLayers,
+            drawingLayersPast: [...state.drawingLayersPast, state.drawingLayers],
+            drawingLayersFuture: []
+        };
+    }
     case 'FLIP_PART': return { ...state, partPlacementTransform: { ...state.partPlacementTransform, flipX: action.payload === 'horizontal' ? !state.partPlacementTransform.flipX : state.partPlacementTransform.flipX, flipY: action.payload === 'vertical' ? !state.partPlacementTransform.flipY : state.partPlacementTransform.flipY } };
     case 'SCALE_PART': return { ...state, partPlacementTransform: { ...state.partPlacementTransform, scale: parseFloat(Math.max(0.1, Math.min(5.0, state.partPlacementTransform.scale + action.payload)).toFixed(1)) } };
 

@@ -25,6 +25,7 @@ import {
   Rect,
   getDistance,
   getPointFromPolar,
+  getSegmentAngleUnderCursor,
   normalizeAngle,
   generateSvgArc
 } from "../utils/geometry";
@@ -104,6 +105,12 @@ export const DraftingCanvas: React.FC = () => {
 
   // Scale Feedback State
     const [scaleFeedback, setScaleFeedback] = useState<{ text: string; center: DrawingPoint } | null>(null);
+  // Alignment (A key) and Angle Tracking State
+  const isAKeyDownRef = useRef<boolean>(false);
+  const [isAlignModeActive, setIsAlignModeActive] = useState<boolean>(false);
+  const pickedBaseAngleRef = useRef<number | null>(null);
+  const [angleFeedback, setAngleFeedback] = useState<{ text: string; center: DrawingPoint; angle: number } | null>(null);
+
   const [textModalPos, setTextModalPos] = useState<DrawingPoint | null>(null);
   const [editingTextPath, setEditingTextPath] = useState<DrawingPath | null>(null);
   const scaleSessionRef = useRef<{ initialScale: number; currentScale: number; timer: number } | null>(null);
@@ -396,6 +403,69 @@ export const DraftingCanvas: React.FC = () => {
     // --- Selection Tool ---
     if (stateRef.current.activeTool === 'select') {
         const clickedPath = findPathUnderCursor(rawPos);
+
+        // --- A-Key Line Angle Sampling / Align Feature ---
+        // If 'A' key is held and a target line is clicked, pick its angle and align selection or active part
+        if (isAKeyDownRef.current && clickedPath) {
+            const pickedAngle = getSegmentAngleUnderCursor(rawPos, clickedPath);
+            if (pickedAngle !== null) {
+                pickedBaseAngleRef.current = pickedAngle;
+                // If placing a registered part:
+                if (stateRef.current.selectedPartForPlacement) {
+                    dispatch({ type: 'SET_PART_ROTATION', payload: pickedAngle });
+                    setAngleFeedback({
+                        text: "📐 角度拾い: " + pickedAngle.toFixed(1) + "° (Shift+Rで刻み回転)",
+                        center: rawPos,
+                        angle: pickedAngle
+                    });
+                    window.setTimeout(() => setAngleFeedback(null), 2500);
+                    return;
+                }
+                // If moving or has selection:
+                if (stateRef.current.selectedPathIds.length > 0) {
+                    const selectedPaths = stateRef.current.drawingLayers
+                        .flatMap(l => l.paths)
+                        .filter(p => stateRef.current.selectedPathIds.includes(p.id));
+                    const allPoints: DrawingPoint[] = [];
+                    selectedPaths.forEach(path => {
+                        const pointGroups = getPathAsPoints(path, false, false);
+                        pointGroups.flat().forEach(p => allPoints.push(p));
+                    });
+                    if (allPoints.length > 0) {
+                        const bounds = getPointsBounds(allPoints);
+                        const center = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
+                        
+                        if (moveOperationRef.current) {
+                            setMoveOperation(prev => {
+                                if (!prev) return null;
+                                const ns = { ...prev, transform: { ...prev.transform, rotation: pickedAngle } };
+                                moveOperationRef.current = ns;
+                                return ns;
+                            });
+                        } else {
+                            // Apply rotation directly to selection around its center
+                            dispatch({
+                                type: 'TRANSFORM_PATHS',
+                                payload: {
+                                    dx: 0,
+                                    dy: 0,
+                                    isCopy: false,
+                                    transform: { rotation: pickedAngle, scale: 1, flipX: false, flipY: false },
+                                    centerPoint: center
+                                }
+                            });
+                        }
+                        setAngleFeedback({
+                            text: "📐 角度拾い: " + pickedAngle.toFixed(1) + "° (Shift+Rで刻み回転)",
+                            center: center,
+                            angle: pickedAngle
+                        });
+                        window.setTimeout(() => setAngleFeedback(null), 2500);
+                        return;
+                    }
+                }
+            }
+        }
         if (e.detail === 2 && clickedPath && clickedPath.text !== undefined) {
             // Double click on text entity in select mode opens text editor modal
             setEditingTextPath(clickedPath);
@@ -836,6 +906,12 @@ export const DraftingCanvas: React.FC = () => {
               return;
           }
 
+          if (e.key === 'a' || e.key === 'A') {
+              isAKeyDownRef.current = true;
+              if (stateRef.current.selectedPathIds.length > 0 || stateRef.current.selectedPartForPlacement) {
+                  setIsAlignModeActive(true);
+              }
+          }
           if (e.key === 'Shift') {
               if (!drawingStateRef.current.shiftPressed) {
                   setDrawingState(prev => {
@@ -865,7 +941,15 @@ export const DraftingCanvas: React.FC = () => {
           let actionTriggered = false;
           const k = e.key.toLowerCase();
 
-          if (k === 'r') { rot = e.shiftKey ? -90 : 90; actionTriggered = true; }
+          if (k === 'r') {
+              // If Shift is pressed, perform step rotation (15 degrees) relative to picked base angle or standard
+              if (e.shiftKey) {
+                  rot = 15; // 15-degree increment
+              } else {
+                  rot = 90; // Standard 90-degree rotation
+              }
+              actionTriggered = true;
+          }
           if (k === 'h') { flipX = true; actionTriggered = true; }
           if (k === 'v') { flipY = true; actionTriggered = true; }
           if (k === 'g') { scaleDelta = -0.1; scaleMultiplier = 0.9; actionTriggered = true; }
@@ -926,6 +1010,10 @@ export const DraftingCanvas: React.FC = () => {
       };
 
       const handleKeyUp = (e: KeyboardEvent) => {
+          if (e.key === 'a' || e.key === 'A') {
+              isAKeyDownRef.current = false;
+              setIsAlignModeActive(false);
+          }
           if (e.key === 'Shift') {
               setDrawingState(prev => {
                   const ns = { ...prev, shiftPressed: false };
@@ -1370,6 +1458,35 @@ export const DraftingCanvas: React.FC = () => {
                 >
                     {scaleFeedback.text}
                 </text>
+            )}
+            {/* Angle Alignment Feedback */}
+            {angleFeedback && (
+                <g pointerEvents="none">
+                    <text
+                        x={angleFeedback.center.x}
+                        y={angleFeedback.center.y - 4}
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        fill="#2563eb"
+                        stroke="white"
+                        strokeWidth={0.6}
+                        paintOrder="stroke"
+                        fontSize={fontSize * 1.3}
+                        fontWeight="bold"
+                        opacity={0.95}
+                    >
+                        {angleFeedback.text}
+                    </text>
+                </g>
+            )}
+            {/* Alignment Mode Active Guide Banner */}
+            {isAlignModeActive && cursorPos && (
+                <g pointerEvents="none" transform={`translate(${cursorPos.x + 3}, ${cursorPos.y + 3})`}>
+                    <rect x={0} y={-3.5} width={38} height={4.8} rx={1} fill="#1e293b" opacity={0.85} />
+                    <text x={2} y={0} fill="#ffffff" fontSize={2.2} fontWeight="bold">
+                        [A] クリックで線の角度を拾う
+                    </text>
+                </g>
             )}
 
             {/* Selection Box */}

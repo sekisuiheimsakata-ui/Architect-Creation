@@ -321,6 +321,8 @@ export type Action =
   | { type: 'DELETE_FOLDER'; payload: { path: string } }
   | { type: 'MOVE_FOLDER'; payload: { sourcePath: string; targetPath: string } }
   | { type: 'ROTATE_PART'; payload: number }
+  | { type: 'SET_PART_ROTATION'; payload: number }
+  | { type: 'APPLY_ROTATION_DELTA'; payload: { delta: number; centerPoint: DrawingPoint } }
   | { type: 'FLIP_PART'; payload: 'horizontal' | 'vertical' }
   | { type: 'SCALE_PART'; payload: number }
   | { type: 'SHOW_CAD_IMPORT_MODAL' }

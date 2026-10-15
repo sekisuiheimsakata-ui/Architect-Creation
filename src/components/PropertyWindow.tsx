@@ -222,6 +222,21 @@ export const PropertyWindow: React.FC = () => {
                             </div>
                         )}
 
+                        {/* Angle & Alignment Guide */}
+                        <div className="p-1.5 bg-slate-50 border border-slate-200 rounded text-[11px] space-y-1 text-slate-600">
+                            <div className="flex items-center justify-between font-semibold text-slate-700">
+                                <span>📐 角度拾い・アライメント</span>
+                                <span className="text-[10px] text-blue-600 bg-blue-50 px-1 py-0.2 rounded border border-blue-200 font-mono">[A] + Click</span>
+                            </div>
+                            <p className="text-[10px] text-slate-500 leading-tight">
+                                <strong>Aキー</strong>を押しながら図面上の線をクリックすると、その線の角度を拾って選択図形が瞬時に平行回転します。
+                            </p>
+                            <div className="flex items-center justify-between pt-1 border-t border-slate-200/60">
+                                <span className="text-[10px] text-slate-500">回転ショートカット:</span>
+                                <span className="text-[10px] text-slate-700 font-mono"><strong>R</strong> (90°) / <strong>Shift+R</strong> (15°)</span>
+                            </div>
+                        </div>
+
                                                 {/* Text Properties (When a text entity is selected) */}
                         {firstSelectedPath?.text !== undefined && (
                             <div className="space-y-2 border border-blue-200 bg-blue-50/40 p-2 rounded-sm">

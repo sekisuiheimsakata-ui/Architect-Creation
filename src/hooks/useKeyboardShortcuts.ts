@@ -72,12 +72,14 @@ export const useKeyboardShortcuts = (
             dispatch({ type: 'SET_ACTIVE_TOOL', payload: nextTool });
             break;
 
-          case 'a': // Shape Cycle
-            e.preventDefault();
-            const shapes: ShapeType[] = ['line', 'polyline', 'rectangle', 'arc'];
-            const currentShapeIndex = shapes.indexOf(state.activeShape);
-            const nextShape = shapes[(currentShapeIndex + 1) % shapes.length];
-            dispatch({ type: 'SET_ACTIVE_SHAPE', payload: nextShape });
+          case 'a': // Shape Cycle (only if no selection or part placement active, so 'A' is free for angle sampling)
+            if (state.selectedPathIds.length === 0 && !state.selectedPartForPlacement) {
+              e.preventDefault();
+              const shapes: ShapeType[] = ['line', 'polyline', 'rectangle', 'arc'];
+              const currentShapeIndex = shapes.indexOf(state.activeShape);
+              const nextShape = shapes[(currentShapeIndex + 1) % shapes.length];
+              dispatch({ type: 'SET_ACTIVE_SHAPE', payload: nextShape });
+            }
             break;
 
           case 'z': // Stroke Width Cycle

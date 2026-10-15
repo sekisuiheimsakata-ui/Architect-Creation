@@ -494,3 +494,40 @@ export const cleanAndNormalizePoints = (
 
     return current;
 };
+
+export const getSegmentAngleUnderCursor = (
+    cursor: DrawingPoint,
+    path: DrawingPath,
+    tolerance: number = 3.0
+): number | null => {
+    const pointGroups = getPathAsPoints(path, false, false);
+    let bestDist = tolerance;
+    let bestAngle: number | null = null;
+
+    for (const points of pointGroups) {
+        if (!points || points.length < 2) continue;
+        for (let k = 0; k < points.length - 1; k++) {
+            const p1 = points[k];
+            const p2 = points[k + 1];
+            const dx = p2.x - p1.x;
+            const dy = p2.y - p1.y;
+            const lenSq = dx * dx + dy * dy;
+            if (lenSq < 1e-6) continue;
+
+            let t = ((cursor.x - p1.x) * dx + (cursor.y - p1.y) * dy) / lenSq;
+            t = Math.max(0, Math.min(1, t));
+            const projX = p1.x + t * dx;
+            const projY = p1.y + t * dy;
+            const dist = Math.hypot(cursor.x - projX, cursor.y - projY);
+
+            if (dist < bestDist) {
+                bestDist = dist;
+                // Calculate angle in degrees [-180, 180] normalized to [0, 360)
+                let deg = (Math.atan2(dy, dx) * 180) / Math.PI;
+                deg = ((deg % 360) + 360) % 360;
+                bestAngle = deg;
+            }
+        }
+    }
+    return bestAngle;
+};
